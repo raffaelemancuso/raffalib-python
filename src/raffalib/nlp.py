@@ -17,18 +17,32 @@
 # copied from https://stackoverflow.com/a/93029/1719931
 import unicodedata, re, itertools, sys
 
+# Get string of control characters
 all_chars = (chr(i) for i in range(sys.maxunicode))
 categories = {'Cc'}
 control_chars = ''.join(c for c in all_chars if unicodedata.category(c) in categories)
 # or equivalently and much more efficiently
 #control_chars = ''.join(map(chr, itertools.chain(range(0x00,0x20), range(0x7f,0xa0))))
-
-hyphens = re.compile(r'-\n')
-control_char_re = re.compile('[%s]' % re.escape(control_chars))
-multiple_spaces_re = re.compile(r'\s+')
-
+ 
 def preprocess_text_for_rag(s):
-    s = hyphens.sub('', s)
+    
+    # Build regular expressions
+    control_char_re = re.compile('[%s]' % re.escape(control_chars))
+    char_rep_re = re.compile(r"(\w|\.)\1{2,}")
+    multiple_spaces_re = re.compile(r'\s+')
+
+    # Replace single characters
+    s = s.replace("-\n", '').replace("\n", " ").replace("\t", " ")
+
+    # Filter non-printable characters
+    # " ".isprintable() -> True
+    # "\t".isprintable() -> False
+    # "\n".isprintable() -> False
+    s = "".join(filter(lambda x:x.isprintable(), s))
+    
+    # Apply other regexes
     s = control_char_re.sub(' ', s)
-    s = multiple_spaces_re.sub(' ', s)    
+    s = char_rep_re.sub(' ', s)
+    s = multiple_spaces_re.sub(' ', s)
+    
     return s

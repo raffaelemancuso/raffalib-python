@@ -3,6 +3,9 @@ name = "raffalib"
 version = "0.1"
 description = "My Python library"
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE.txt"]
+keywords = ["pandas", "polars"]
 authors = [
     { name = "Raffaele Mancuso", email = "raffaelemancuso532@gmail.com" }
 ]
@@ -15,6 +18,9 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
+[project.optional-dependencies]
+docs = ["sphinx"]
+
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build"]
+build-backend = "uv_build"

@@ -17,7 +17,7 @@
 import logging
 from rich.logging import RichHandler
 
-def create_logger(app_name:str="myapp"):
+def create_logger(app_name:str=None):
     logging.captureWarnings(True)
     logger = logging.getLogger(app_name)
     while logger.hasHandlers():
@@ -27,7 +27,7 @@ def create_logger(app_name:str="myapp"):
     fmt = logging.Formatter(
         #fmt="{asctime} - {name} - {levelname} - {message}",
         # rich already prints the timestamp
-        fmt="{name} - {levelname}\n{message}",
+        fmt="{name}: {message}",
         datefmt="%Y-%m-%d %H:%M:%S",
         style="{",
     )

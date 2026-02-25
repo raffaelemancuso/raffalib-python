@@ -24,16 +24,14 @@ import time
 import datetime
 import humanize
 
+logger = logging.getLogger(__name__)
 pl.Config(thousands_separator=",")
-logger_name = "polars_raffa"
-
 
 class PercOptions(Enum):
     NO = auto()
     TOTAL = auto()
     COLUMNS = auto()
     ROWS = auto()
-
 
 @pl.api.register_series_namespace("raffa")
 class RaffaPolarsSeriesUtils:
@@ -52,7 +50,7 @@ class RaffaPolarsSeriesUtils:
 
     def endlog(self):
         if "old_shape" not in self._df._series.get_metadata():
-            logging.getLogger(logger_name).info(
+            logger.info(
                 "You have to call startlog() before calling endlog()."
             )
             return self._series
@@ -87,7 +85,7 @@ class RaffaPolarsSeriesUtils:
         elapsed = end_time - start_time
         diff = datetime.timedelta(microseconds=elapsed / 1000)
         msg += "\nTook: " + humanize.precisedelta(diff)
-        logging.getLogger(logger_name).info(msg)
+        logger.info(msg)
         return self._series
 
     def freq(self) -> pl.DataFrame:
@@ -133,7 +131,7 @@ class RaffaPolarsDataFrameUtils:
 
     def endlog(self):
         if "old_shape" not in self._df.config_meta.get_metadata():
-            logging.getLogger(logger_name).info(
+            logger.info(
                 "You have to call startlog() before calling endlog()."
             )
             return self._df
@@ -170,7 +168,7 @@ class RaffaPolarsDataFrameUtils:
         elapsed = end_time - start_time
         diff = datetime.timedelta(microseconds=elapsed / 1000)
         msg += "\nTook: " + humanize.precisedelta(diff)
-        logging.getLogger(logger_name).info(msg)
+        logger.info(msg)
         return self._df
         
     def freq(self, col, *args, **kwargs) -> pl.DataFrame:
@@ -218,7 +216,7 @@ class RaffaPolarsDataFrameUtils:
         if is_filter:
             n_initial = df1.shape[0]
             n_var = n_rows_joined - n_initial
-            logging.getLogger(logger_name).info(
+            logger.info(
                 f"Detected filtering join. "
                 f"Rows variation {n_var:,d}/{n_initial:,d} ({n_var / n_initial:.2%}), "
                 f"total rows after join: {n_rows_joined:,d}/{n_initial:,d} ({n_rows_joined / n_initial:.2%})"
@@ -248,7 +246,7 @@ class RaffaPolarsDataFrameUtils:
             cols_right = set(df2.columns)
             msg += f"Columns in output table not in left table: {cols_out - cols_left})\n"
             msg += f"Columns in output table not in right table: {cols_out - cols_right})"
-        logging.getLogger(logger_name).info(msg)
+        logger.info(msg)
         # Add a column that indicate where that row comes from
         if keep_source:
             joined = joined.with_columns(
