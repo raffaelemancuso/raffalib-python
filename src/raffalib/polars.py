@@ -14,6 +14,44 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""
+Example of usage
+
+>>> import polars as pl
+>>> import polars.selectors as cs
+>>> import raffalib
+>>> import raffalib.polars
+>>> 
+>>> logger = raffalib.create_logger(rich=False, fmt="{message}")
+>>> df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
+>>> df = df.raffa.startlog(clone=True).raffa.replace_string_with_null("NA").raffa.endlog(timeit=False)
+Changed 19/2,752 (0.69%) values.
+>>> df = df.with_columns(pl.col(["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]).cast(pl.Float32).name.keep())
+>>> df.head()
+shape: (5, 8)
+┌─────────┬───────────┬────────────────┬───────────────┬───────────────────┬─────────────┬────────┬───────┐
+│ species ┆ island    ┆ bill_length_mm ┆ bill_depth_mm ┆ flipper_length_mm ┆ body_mass_g ┆ sex    ┆ year  │
+│ ---     ┆ ---       ┆ ---            ┆ ---           ┆ ---               ┆ ---         ┆ ---    ┆ ---   │
+│ str     ┆ str       ┆ f32            ┆ f32           ┆ f32               ┆ f32         ┆ str    ┆ i64   │
+╞═════════╪═══════════╪════════════════╪═══════════════╪═══════════════════╪═════════════╪════════╪═══════╡
+│ Adelie  ┆ Torgersen ┆ 39.099998      ┆ 18.700001     ┆ 181.0             ┆ 3,750.0     ┆ male   ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 39.5           ┆ 17.4          ┆ 186.0             ┆ 3,800.0     ┆ female ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 40.299999      ┆ 18.0          ┆ 195.0             ┆ 3,250.0     ┆ female ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ null           ┆ null          ┆ null              ┆ null        ┆ null   ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 36.700001      ┆ 19.299999     ┆ 193.0             ┆ 3,450.0     ┆ female ┆ 2,007 │
+└─────────┴───────────┴────────────────┴───────────────┴───────────────────┴─────────────┴────────┴───────┘
+>>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
+Removed 2/344 (0.58%) rows.
+>>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog(timeit=False)
+Removed 192/344 (55.81%) rows.
+>>> _ = df.raffa.startlog().select(pl.exclude(["bill_length_mm", "bill_depth_mm"])).raffa.endlog(timeit=False)
+Removed 2/8 (25.00%) columns.
+>>> _ = df.raffa.startlog().fill_null(0).raffa.endlog(timeit=False)
+Shape is the same. No value-level comparison done because clone=False was used in startlog().
+>>> _ = df.raffa.startlog(clone=True).fill_null("0").raffa.endlog(timeit=False)
+Changed 11/2,752 (0.40%) values.
+"""
+
 import polars as pl
 import polars.selectors as cs
 import polars_config_meta
@@ -48,7 +86,7 @@ class RaffaPolarsSeriesUtils:
             self._series.config_meta.set(old_series=None)
         return self._series
 
-    def endlog(self):
+    def endlog(self, timeit=True):
         if "old_shape" not in self._df._series.get_metadata():
             logger.info(
                 "You have to call startlog() before calling endlog()."
@@ -59,19 +97,23 @@ class RaffaPolarsSeriesUtils:
             custom_msg = ""
         else:
             custom_msg += ". "
+        msg = f"{custom_msg}"
+        
         start_time = self._series.config_meta.get_metadata()["start_time"]
         old_shape = self._series.config_meta.get_metadata()["old_shape"]
         new_shape = self._series.shape
+        
         if new_shape != old_shape:
             dr = new_shape[0] - old_shape[0]
             msg = (
                 f"{custom_msg}"
                 f"Variation: {dr:,d}/{old_shape[0]:,d} ({dr / old_shape[0]:.2%}).\n"
             )
+            
         else:
             old_series = self._series.config_meta.get_metadata()["old_series"]
             if old_series is None:
-                msg = f"{custom_msg}Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+                msg += f"Shape is the same. No value-level comparison done because clone=False was used in startlog()."
             else:
                 a = (self._df != old_series).fill_null(False).to_numpy()
                 b = (
@@ -80,11 +122,14 @@ class RaffaPolarsSeriesUtils:
                 ).to_numpy()
                 n_changed = (a | b).sum()
                 n_values = old_shape[0]
-                msg = f"{custom_msg}Shape is the same. Values changed: {n_changed:,d}/{n_values:,d} ({n_changed / n_values:.2%})."
-        end_time = time.perf_counter_ns()
-        elapsed = end_time - start_time
-        diff = datetime.timedelta(microseconds=elapsed / 1000)
-        msg += "\nTook: " + humanize.precisedelta(diff)
+                msg += f"Shape is the same. Values changed: {n_changed:,d}/{n_values:,d} ({n_changed / n_values:.2%})."
+        
+        if timeit:
+            end_time = time.perf_counter_ns()
+            elapsed = end_time - start_time
+            diff = datetime.timedelta(microseconds=elapsed / 1000)
+            msg += "\nTook: " + humanize.precisedelta(diff)
+            
         logger.info(msg)
         return self._series
 
@@ -116,59 +161,79 @@ class RaffaPolarsSeriesUtils:
 
 @pl.api.register_dataframe_namespace("raffa")
 class RaffaPolarsDataFrameUtils:
+    
     def __init__(self, df: pl.DataFrame):
         self._df = df
 
     def startlog(self, custom_msg=None, clone=False):
-        self._df.config_meta.set(custom_msg=custom_msg)
-        self._df.config_meta.set(old_shape=self._df.shape)
-        self._df.config_meta.set(start_time=time.perf_counter_ns())
+        self._df.config_meta.set(custom_msg=custom_msg, initial_shape=self._df.shape, start_time=time.perf_counter_ns())
         if clone:
-            self._df.config_meta.set(old_df=self._df.clone())
+            self._df.config_meta.set(initial_df=self._df.clone())
         else:
-            self._df.config_meta.set(old_df=None)
+            self._df.config_meta.set(initial_df=None)
         return self._df
 
-    def endlog(self):
-        if "old_shape" not in self._df.config_meta.get_metadata():
+    def endlog(self, timeit=True):
+        
+        if "initial_shape" not in self._df.config_meta.get_metadata():
             logger.info(
                 "You have to call startlog() before calling endlog()."
             )
             return self._df
+        initial_shape = self._df.config_meta.get_metadata()["initial_shape"]
+        
         custom_msg = self._df.config_meta.get_metadata()["custom_msg"]
         if custom_msg is None:
             custom_msg = ""
         else:
             custom_msg += ". "
+        msg = f"{custom_msg}"
         start_time = self._df.config_meta.get_metadata()["start_time"]
-        old_shape = self._df.config_meta.get_metadata()["old_shape"]
-        new_shape = self._df.shape
-        if new_shape != old_shape:
-            dr = new_shape[0] - old_shape[0]
-            dc = new_shape[1] - old_shape[1]
-            msg = (
-                f"{custom_msg}"
-                f"Rows variation: {dr:,d}/{old_shape[0]:,d} ({dr / old_shape[0]:.2%}).\n"
-                f"Columns variation: {dc:,d}/{old_shape[1]:,d} ({dc / old_shape[1]:.2%})."
-            )
+        
+        final_shape = self._df.shape
+        if(final_shape != initial_shape):
+            nrow0, ncol0 = initial_shape
+            nrow1, ncol1 = final_shape
+            dr = nrow0 - nrow1
+            dc = ncol0 - ncol1
+            if dr > 0:
+                msg += f"Removed {dr:,d}/{nrow0:,d} ({dr/nrow0:.2%}) rows."
+            elif dr < 0:
+                dr = abs(dr)
+                msg += f"Added {dr:,d}/{nrow0:,d} ({dr/nrow0:.2%}) rows."
+            if dc > 0:
+                msg += f"Removed {dc:,d}/{ncol0:,d} ({dc/ncol0:.2%}) columns."
+            elif dc < 0:
+                dc = abs(dc)
+                msg += f"Added {dc:,d}/{ncol0:,d} ({dc/ncol0:.2%}) columns."
         else:
-            old_df = self._df.config_meta.get_metadata()["old_df"]
-            if old_df is None:
-                msg = f"{custom_msg}Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+            initial_df = self._df.config_meta.get_metadata()["initial_df"]
+            if initial_df is None:
+                msg += "Shape is the same. No value-level comparison done because clone=False was used in startlog()."
             else:
-                a = (self._df != old_df).fill_null(False).to_numpy()
+                a = (self._df != initial_df).fill_null(False).to_numpy()
                 b = (
                     self._df.with_columns(pl.all().is_null())
-                    != old_df.with_columns(pl.all().is_null())
+                    != initial_df.with_columns(pl.all().is_null())
                 ).to_numpy()
-                n_changed = (a | b).sum().sum()
-                n_values = old_shape[0] * old_shape[1]
-                msg = f"{custom_msg}Shape is the same. Values changed: {n_changed:,d}/{n_values:,d} ({n_changed / n_values:.2%})."
-        end_time = time.perf_counter_ns()
-        elapsed = end_time - start_time
-        diff = datetime.timedelta(microseconds=elapsed / 1000)
-        msg += "\nTook: " + humanize.precisedelta(diff)
+                # Get total number of cells that have changed
+                nchanged = (a | b).sum().sum()   
+                if(nchanged == 0):
+                    msg += "No changes detected."
+                else:
+                    ntot = final_shape[0] * final_shape[1]
+                    msg += f"Changed {nchanged:,d}/{ntot:,d} ({nchanged/ntot:.2%}) values."
+        if timeit:
+            end_time = time.perf_counter_ns()
+            elapsed = end_time - start_time
+            diff = datetime.timedelta(microseconds=elapsed / 1000)
+            msg += "\nTook: " + humanize.precisedelta(diff)
         logger.info(msg)
+        return self._df
+        
+    def replace_string_with_null(self, s):
+        # self._df.with_columns(pl.col(pl.String).str.replace(s, None).name.keep())
+        self._df = self._df.with_columns(pl.when(pl.col(pl.String) == s).then(None).otherwise(pl.col(pl.String)).name.keep())
         return self._df
         
     def freq(self, col, *args, **kwargs) -> pl.DataFrame:
@@ -263,3 +328,9 @@ class RaffaPolarsDataFrameUtils:
         # Drop source columns and return
         joined = joined.drop([left_col, right_col])
         return joined
+
+if __name__ == "__main__":
+    # Run with `uv run python -P polars.py -v`
+    import doctest
+    #doctest.testmod(optionflags=doctest.REPORT_NDIFF)
+    doctest.testmod()

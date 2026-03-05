@@ -12,7 +12,8 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "humanize>=4.15.0",
-    "pandas-flavor>=0.8.1",
+    "natsort>=8.4.0",
+    "polars>=1.38.1",
     "polars-config-meta>=0.3.1",
     "rich>=14.2.0",
     "tqdm>=4.67.1",
@@ -24,3 +25,8 @@ docs = ["sphinx"]
 [build-system]
 requires = ["uv_build"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipython>=9.11.0",
+]

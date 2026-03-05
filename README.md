@@ -29,26 +29,23 @@ But other data analysis functions are available as well.
 
 Try to run the following example.
 
-You need the `palmerpenguins` package from `PyPI`:
-
 ```python
 import pandas as pd
 import raffalib
 import raffalib.pandas
-import logging
-from palmerpenguins import load_penguins
-_ = raffalib.create_logger()
-df = load_penguins()
+
+logger = raffalib.create_logger()
+df = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
 df.head()
-logging.info("Drop rows with missing bill_depth_mm")
+logger.info("Drop rows with missing bill_depth_mm")
 _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
-logging.info("Drop non Adelie penguins")
+logger.info("Drop non Adelie penguins")
 _ = df.raffa.startlog().query("species=='Adelie'").raffa.endlog()
-logging.info("Drop columns")
+logger.info("Drop columns")
 _ = df.raffa.startlog().drop(["bill_length_mm", "bill_depth_mm"], axis=1).raffa.endlog()
-logging.info("Fill missings (trial 1)")
+logger.info("Fill missings (trial 1)")
 _ = df.raffa.startlog().fillna(0).raffa.endlog()
-logging.info("Fill missings (trial 2)")
+logger.info("Fill missings (trial 2)")
 _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog()
 ```
 
