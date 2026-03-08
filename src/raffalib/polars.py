@@ -14,44 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Example of usage
-
->>> import polars as pl
->>> import polars.selectors as cs
->>> import raffalib
->>> import raffalib.polars
->>> 
->>> logger = raffalib.create_logger(rich=False, fmt="{message}")
->>> df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
->>> df = df.raffa.startlog(clone=True).raffa.replace_string_with_null("NA").raffa.endlog(timeit=False)
-Changed 19/2,752 (0.69%) values.
->>> df = df.with_columns(pl.col(["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]).cast(pl.Float32).name.keep())
->>> df.head()
-shape: (5, 8)
-┌─────────┬───────────┬────────────────┬───────────────┬───────────────────┬─────────────┬────────┬───────┐
-│ species ┆ island    ┆ bill_length_mm ┆ bill_depth_mm ┆ flipper_length_mm ┆ body_mass_g ┆ sex    ┆ year  │
-│ ---     ┆ ---       ┆ ---            ┆ ---           ┆ ---               ┆ ---         ┆ ---    ┆ ---   │
-│ str     ┆ str       ┆ f32            ┆ f32           ┆ f32               ┆ f32         ┆ str    ┆ i64   │
-╞═════════╪═══════════╪════════════════╪═══════════════╪═══════════════════╪═════════════╪════════╪═══════╡
-│ Adelie  ┆ Torgersen ┆ 39.099998      ┆ 18.700001     ┆ 181.0             ┆ 3,750.0     ┆ male   ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ 39.5           ┆ 17.4          ┆ 186.0             ┆ 3,800.0     ┆ female ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ 40.299999      ┆ 18.0          ┆ 195.0             ┆ 3,250.0     ┆ female ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ null           ┆ null          ┆ null              ┆ null        ┆ null   ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ 36.700001      ┆ 19.299999     ┆ 193.0             ┆ 3,450.0     ┆ female ┆ 2,007 │
-└─────────┴───────────┴────────────────┴───────────────┴───────────────────┴─────────────┴────────┴───────┘
->>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/344 (0.58%) rows.
->>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog(timeit=False)
-Removed 192/344 (55.81%) rows.
->>> _ = df.raffa.startlog().select(pl.exclude(["bill_length_mm", "bill_depth_mm"])).raffa.endlog(timeit=False)
-Removed 2/8 (25.00%) columns.
->>> _ = df.raffa.startlog().fill_null(0).raffa.endlog(timeit=False)
-Shape is the same. No value-level comparison done because clone=False was used in startlog().
->>> _ = df.raffa.startlog(clone=True).fill_null("0").raffa.endlog(timeit=False)
-Changed 11/2,752 (0.40%) values.
-"""
-
 import polars as pl
 import polars.selectors as cs
 import polars_config_meta
@@ -165,15 +127,33 @@ class RaffaPolarsDataFrameUtils:
     def __init__(self, df: pl.DataFrame):
         self._df = df
 
-    def startlog(self, custom_msg=None, clone=False):
-        self._df.config_meta.set(custom_msg=custom_msg, initial_shape=self._df.shape, start_time=time.perf_counter_ns())
+    def startlog(self, clone=False) -> pl.DataFrame:
+        """
+        Initialize the logger.
+
+        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :type clone: bool
+        :return: The same DataFrame for piping.
+        :rtype: pl.DataFrame
+        """
+        self._df.config_meta.set(initial_shape=self._df.shape, start_time=time.perf_counter_ns())
         if clone:
             self._df.config_meta.set(initial_df=self._df.clone())
         else:
             self._df.config_meta.set(initial_df=None)
         return self._df
 
-    def endlog(self, timeit=True):
+    def endlog(self, custom_msg:str|None = None, timeit:bool=True) -> pl.DataFrame:
+        """
+        Log changes to the DataFrame.
+
+        :param msg: A custom message to log before the actual log
+        :type msg: str
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :return: The DataFrame for piping.
+        :rtype: pl.DataFrame
+        """
         
         if "initial_shape" not in self._df.config_meta.get_metadata():
             logger.info(

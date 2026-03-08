@@ -13,8 +13,10 @@ requires-python = ">=3.13"
 dependencies = [
     "humanize>=4.15.0",
     "natsort>=8.4.0",
+    "pandas>=3.0.1",
     "polars>=1.38.1",
     "polars-config-meta>=0.3.1",
+    "python-docx>=1.2.0",
     "rich>=14.2.0",
     "tqdm>=4.67.1",
 ]
@@ -27,6 +29,25 @@ requires = ["uv_build"]
 build-backend = "uv_build"
 
 [dependency-groups]
+bibliometrics = [
+    "beautifulsoup4>=4.14.3",
+    "fake-useragent>=2.2.0",
+    "keepassxc-proxy-client>=0.1.7",
+    "pyalex>=0.21",
+]
+db = [
+    "sqlalchemy>=2.0.48",
+]
 dev = [
-    "ipython>=9.11.0",
+    "ruff>=0.15.5",
+]
+docs = [
+    "sphinx>=9.1.0",
+    "sphinx-autobuild>=2025.8.25",
+]
+keepassxc = [
+    "python-gnupg>=0.5.6",
+]
+web = [
+    "selenium>=4.41.0",
 ]

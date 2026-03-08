@@ -1,0 +1,28 @@
+.. raffalib-python documentation master file, created by
+   sphinx-quickstart on Mon Feb 16 10:41:01 2026.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
+raffalib-python documentation
+=============================
+
+**raffalib-python** is a Python library.
+
+Its main purpose is to enrich `pandas <https://pandas.pydata.org/>`_ and `polars <https://pola.rs/>`_ with `STATA <https://www.stata.com/>`_-like logging and `.docx` export capabilities.
+But other data wrangling capabilities are also provided.
+It offers a *simple* and *intuitive* API.
+
+Check out the :doc:`examples` section for further information.
+
+.. note::
+
+   This project is under active development.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+   
+   installation
+   examples
+   api
+

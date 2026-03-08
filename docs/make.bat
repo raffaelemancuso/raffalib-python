@@ -4,11 +4,11 @@ pushd %~dp0
 
 REM Command file for Sphinx documentation
 
-if "%SPHINXBUILD%" == "" (
-	set SPHINXBUILD=sphinx-build
-)
-set SOURCEDIR=.
-set BUILDDIR=_build
+REM if "%SPHINXBUILD%" == "" (
+	set SPHINXBUILD=uv run sphinx-build
+REM )
+set SOURCEDIR=source
+set BUILDDIR=build
 
 %SPHINXBUILD% >NUL 2>NUL
 if errorlevel 9009 (
