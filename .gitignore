@@ -2,4 +2,4 @@ __pycache__
 /docs/build
 /docs/source/*
 !/docs/source/*.rst
-!/docs/source/config.py
+!/docs/source/conf.py
