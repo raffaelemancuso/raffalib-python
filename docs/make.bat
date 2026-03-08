@@ -2,6 +2,8 @@
 
 pushd %~dp0
 
+call ./clean.bat
+
 REM Command file for Sphinx documentation
 
 REM if "%SPHINXBUILD%" == "" (

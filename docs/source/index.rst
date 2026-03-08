@@ -8,21 +8,20 @@ raffalib-python documentation
 
 **raffalib-python** is a Python library.
 
-Its main purpose is to enrich `pandas <https://pandas.pydata.org/>`_ and `polars <https://pola.rs/>`_ with `STATA <https://www.stata.com/>`_-like logging and `.docx` export capabilities.
+Its main purpose is to enrich `pandas <https://pandas.pydata.org/>`_ and `polars <https://pola.rs/>`_ 
+with `STATA <https://www.stata.com/>`_-like logging and ``.docx`` export capabilities.
 But other data wrangling capabilities are also provided.
-It offers a *simple* and *intuitive* API.
 
-Check out the :doc:`examples` section for further information.
+Check out the :doc:`examples` section for a quick introduction.
 
 .. note::
 
    This project is under active development.
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-   
-   installation
-   examples
-   api
+   :hidden:
+
+   Home page <self>
+   Install <installation>
+   Examples <examples>
 

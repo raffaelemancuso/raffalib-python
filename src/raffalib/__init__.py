@@ -14,6 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""
+My library
+"""
+
 #from .check_openalex_api_key import check_openalex_api_key
 from .tqdm import tqdm_batch
 from .make_backup_file import make_backup_file
