@@ -9,13 +9,13 @@ from dataclasses import dataclass
 
 @dataclass
 class DocxOptions:
-    page_height = 210
-    page_width = 297
-    landscape = False
-    left_margin = 25.4
-    right_margin = 25.4
-    top_margin = 25.4
-    bottom_margin = 25.4
+    page_height:float = 210
+    page_width:float = 297
+    landscape:bool = False
+    left_margin:float = 25.4
+    right_margin:float = 25.4
+    top_margin:float = 25.4
+    bottom_margin:float = 25.4
     heading_text:str|None = None
     heading_font_name:str = "Aptos"
     heading_font_size = 12
@@ -77,30 +77,17 @@ def prepare_docx(options:DocxOptions):
         paragraph_format = style.paragraph_format
         paragraph_format.space_before = Pt(options.heading_space_before)
         paragraph_format.space_after = Pt(options.heading_space_after)
-    paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
     
     return doc
      
 # Additional workaround to make autofit actually work
-# See: https://github.com/python-openxml/python-docx/issues/209#issuecomment-566128709
-def set_autofit(doc: Document) -> Document:
-    """
-    Hotfix for autofit.
-    """
-    for t_idx, table in enumerate(doc.tables):
-        doc.tables[t_idx].autofit = True
-        doc.tables[t_idx].allow_autofit = True
-        doc.tables[t_idx]._tblPr.xpath("./w:tblW")[0].attrib[
-            "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type"
-        ] = "auto"
-        for row_idx, r_val in enumerate(doc.tables[t_idx].rows):
-            for cell_idx, c_val in enumerate(
-                doc.tables[t_idx].rows[row_idx].cells
-            ):
-                doc.tables[t_idx].rows[row_idx].cells[
-                    cell_idx
-                ]._tc.tcPr.tcW.type = "auto"
-                doc.tables[t_idx].rows[row_idx].cells[
-                    cell_idx
-                ]._tc.tcPr.tcW.w = 0
-    return doc
+# See: https://github.com/python-openxml/python-docx/issues/209#issuecomment-566128709 
+def table_autofit_hotfix(table):
+    for column in table.columns:
+        for cell in column.cells:
+            tc = cell._tc
+            tcPr = tc.get_or_add_tcPr()
+            tcW = tcPr.get_or_add_tcW()
+            tcW.type = 'auto'
+    return table

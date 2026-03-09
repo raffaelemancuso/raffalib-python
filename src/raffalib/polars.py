@@ -17,6 +17,7 @@
 import polars as pl
 import polars.selectors as cs
 import polars_config_meta
+import polars_permute
 from enum import Enum, auto
 import logging
 import copy
@@ -136,6 +137,7 @@ class RaffaPolarsDataFrameUtils:
         :return: The same DataFrame for piping.
         :rtype: pl.DataFrame
         """
+        
         self._df.config_meta.set(initial_shape=self._df.shape, start_time=time.perf_counter_ns())
         if clone:
             self._df.config_meta.set(initial_df=self._df.clone())
@@ -243,12 +245,29 @@ class RaffaPolarsDataFrameUtils:
 
         return ct.with_columns(values / options[perc] * 100)
 
-    def join(self, df2, *args, keep_source: bool = False, log_col_changes=False, **kwargs):
+    def join(self, df2:pl.DataFrame, *args, keep_row_index: bool = False, log_col_changes=False, **kwargs):
+        """
+        Wrapper around `pl.DataFrame.join` to log join operations.
+
+        :param df2: The dataframe on the right of the join
+        :type df2: pl.DataFrame
+        :param *args: Additional position arguments passed to `pl.DataFrame.join`
+        :type *args: Any
+        :param keep_row_index: Whether to keep columns indicating the row index of the source table in the output table
+        :type keep_row_index: bool
+        :param log_col_changes: Whether to log column changes
+        :type log_col_changes: bool
+        :param *kwargs: Additional keyword arguments passed to `pl.DataFrame.join`
+        :type *kwargs: Any
+        :return: The joined DataFrame
+        :rtype: pl.DataFrame
+        """
+        
         left_col = "source_left"
         right_col = "source_right"
         # Get DataFrame to join, add source column
-        df1 = self._df.with_columns(pl.lit(True).alias(left_col))
-        df2 = df2.with_columns(pl.lit(True).alias(right_col))
+        df1 = self._df.with_row_index(left_col)
+        df2 = df2.with_row_index(right_col)
         # Join DataFrames
         joined = df1.join(df2, *args, **kwargs)
         n_rows_joined = joined.shape[0]
@@ -269,21 +288,21 @@ class RaffaPolarsDataFrameUtils:
             joined = joined.drop([left_col])
             return joined
         # Detect how many rows in the output table are present in the input tables
-        joined = joined.with_columns(
-            pl.col([left_col, right_col]).fill_null(False)
-        )
-        n_both = joined.filter(pl.col(left_col), pl.col(right_col)).shape[0]
+        joined_both = joined.filter(~pl.col(left_col).is_null(), ~pl.col(right_col).is_null())
+        n_both = joined_both.shape[0]
+        n_left_dups = joined_both.get_column(left_col).is_duplicated().sum()
+        n_right_dups = joined_both.get_column(right_col).is_duplicated().sum()
         n_left_only = joined.filter(
-            pl.col(left_col), ~pl.col(right_col)
+            ~pl.col(left_col).is_null(), pl.col(right_col).is_null()
         ).shape[0]
         n_right_only = joined.filter(
-            ~pl.col(left_col), pl.col(right_col)
+            pl.col(left_col).is_null(), ~pl.col(right_col).is_null()
         ).shape[0]
         # Log rows information
         msg = f"Total rows in output table: {n_rows_joined:,d}\n"
-        msg += f"\tFrom left: {n_left_only:,d} ({n_left_only / n_rows_joined:.2%})\n"
-        msg += f"\tFrom right: {n_right_only:,d} ({n_right_only / n_rows_joined:.2%})\n"
-        msg += f"\tFrom both: {n_both:,d} ({n_both / n_rows_joined:.2%})\n"
+        msg += f"From left only: {n_left_only:,d}/{n_rows_joined:,d} ({n_left_only / n_rows_joined:.2%})\n"
+        msg += f"From right only: {n_right_only:,d}/{n_rows_joined:,d} ({n_right_only / n_rows_joined:.2%})\n"
+        msg += f"From both: {n_both:,d}/{n_rows_joined:,d} ({n_both / n_rows_joined:.2%}) (left dups {n_left_dups}, right dups {n_right_dups})\n"
         # Detect added and removed columns
         if log_col_changes:
             cols_out = set(joined.columns)
@@ -292,21 +311,11 @@ class RaffaPolarsDataFrameUtils:
             msg += f"Columns in output table not in left table: {cols_out - cols_left})\n"
             msg += f"Columns in output table not in right table: {cols_out - cols_right})"
         logger.info(msg)
-        # Add a column that indicate where that row comes from
-        if keep_source:
-            joined = joined.with_columns(
-                pl.when(pl.col.source_left & pl.col.source_right)
-                .then(pl.lit("both"))
-                .when(pl.col.source_left & ~pl.col.source_right)
-                .then(pl.lit("left_only"))
-                .when(~pl.col.source_left & pl.col.source_right)
-                .then(pl.lit("right_only"))
-                .otherwise(pl.lit("error"))
-                .alias("source")
-            )
-            joined = joined.permute.append(["source"])
-        # Drop source columns and return
-        joined = joined.drop([left_col, right_col])
+        # Drop row indices
+        if not keep_row_index:
+            joined = joined.drop([left_col, right_col])
+        else:
+            joined = joined.permute.append([left_col, right_col])
         return joined
 
 if __name__ == "__main__":

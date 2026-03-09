@@ -578,6 +578,15 @@ wheels = [
 ]
 
 [[package]]
+name = "polars-permute"
+version = "0.1.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/99/fcd514c93ab6e0683e168fa8ecbe9e7d248892bea83bdbae2c183ae305e6/polars_permute-0.1.6.tar.gz", hash = "sha256:395230a28e3f8193198ff6b1b4dfa673ac3ff47942b72b112e4d66a2824b0c05", size = 7948, upload-time = "2026-01-05T11:49:45.07Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/d1/3b8e92398c78851258ef7b8d11fbe9df15f858b880ae59d28ac9d206326e/polars_permute-0.1.6-py3-none-any.whl", hash = "sha256:44a56fc7ffb0d1035c95b0496830f2389f70f8b903b7c67314f497b4e7a51efe", size = 5717, upload-time = "2026-01-05T11:49:43.023Z" },
+]
+
+[[package]]
 name = "polars-runtime-32"
 version = "1.38.1"
 source = { registry = "https://pypi.org/simple" }
@@ -791,6 +800,7 @@ pandas = [
 polars = [
     { name = "polars" },
     { name = "polars-config-meta" },
+    { name = "polars-permute" },
 ]
 web = [
     { name = "selenium" },
@@ -827,6 +837,7 @@ pandas = [{ name = "pandas", specifier = ">=3.0.1" }]
 polars = [
     { name = "polars", specifier = ">=1.38.1" },
     { name = "polars-config-meta", specifier = ">=0.3.1" },
+    { name = "polars-permute", specifier = ">=0.1.6" },
 ]
 web = [{ name = "selenium", specifier = ">=4.41.0" }]
 

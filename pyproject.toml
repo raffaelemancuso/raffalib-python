@@ -18,17 +18,14 @@ dependencies = [
     "tqdm>=4.67.1",
 ]
 
-[build-system]
-requires = ["uv_build"]
-build-backend = "uv_build"
-
-[dependency-groups]
+[project.optional-dependencies]
 pandas = [
 	"pandas>=3.0.1",
 ]
 polars = [
 	"polars>=1.38.1",
-    "polars-config-meta>=0.3.1",
+	"polars-config-meta>=0.3.1",
+	"polars-permute>=0.1.6",
 ]
 bibliometrics = [
     "beautifulsoup4>=4.14.3",
@@ -54,3 +51,7 @@ docs = [
 web = [
     "selenium>=4.41.0",
 ]
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"

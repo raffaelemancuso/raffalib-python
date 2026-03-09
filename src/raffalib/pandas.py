@@ -22,7 +22,7 @@ import pandas as pd
 import logging
 from natsort import natsorted
 from pathlib import Path
-from .export_docx import prepare_docx, set_autofit, DocxOptions
+from .export_docx import prepare_docx, DocxOptions, table_autofit_hotfix
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ class RaffaDataFrame:
                     t.cell(i + 1, j).text = str(df.values[i, j])
 
         if autofit:
-            doc = set_autofit(doc)
+            t = table_autofit_hotfix(t)
 
         # Set table style
         # See: https://github.com/python-openxml/python-docx/issues/9
@@ -301,10 +301,3 @@ class RaffaDataFrame:
         # save the doc
         doc.save(outfp)
 
-
-if __name__ == "__main__":
-    # Run with `uv run python -P pandas.py -v`
-    import doctest
-
-    # doctest.testmod(optionflags=doctest.REPORT_NDIFF)
-    doctest.testmod()
