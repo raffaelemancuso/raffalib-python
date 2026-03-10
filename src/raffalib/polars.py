@@ -18,6 +18,7 @@ import polars as pl
 import polars.selectors as cs
 import polars_config_meta
 import polars_permute
+from .export_docx import DocxFile
 from enum import Enum, auto
 import logging
 import copy
@@ -34,13 +35,30 @@ class PercOptions(Enum):
     COLUMNS = auto()
     ROWS = auto()
 
+# --- SERIES --- #
+
+try:
+    # delete the accessor to avoid warning
+    # See: https://stackoverflow.com/questions/69720999/how-to-prevent-pandas-accessor-to-issue-override-warning
+    del pl.Series.raffa
+except AttributeError:
+    pass
+
 @pl.api.register_series_namespace("raffa")
 class RaffaPolarsSeriesUtils:
     def __init__(self, series: pl.Series):
         self._series = series
         
-    def startlog(self, custom_msg=None, clone=False):
-        self._series.config_meta.set(custom_msg=custom_msg)
+    def startlog(self, clone=False):
+        """
+        Initialize the logger.
+
+        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :type clone: bool
+        :return: The same DataFrame for piping.
+        :rtype: pl.DataFrame
+        """
+        
         self._series.config_meta.set(old_shape=self._series.shape)
         self._series.config_meta.set(start_time=time.perf_counter_ns())
         if clone:
@@ -49,13 +67,23 @@ class RaffaPolarsSeriesUtils:
             self._series.config_meta.set(old_series=None)
         return self._series
 
-    def endlog(self, timeit=True):
+    def endlog(self, custom_msg:str|None = None, timeit:bool=True) -> pl.Series:
+        """
+        Log changes to the Series.
+
+        :param msg: A custom message to log before the actual log
+        :type msg: str
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :return: The Series for piping.
+        :rtype: pl.Series
+        """
         if "old_shape" not in self._df._series.get_metadata():
             logger.info(
                 "You have to call startlog() before calling endlog()."
             )
             return self._series
-        custom_msg = self._series.config_meta.get_metadata()["custom_msg"]
+
         if custom_msg is None:
             custom_msg = ""
         else:
@@ -97,6 +125,12 @@ class RaffaPolarsSeriesUtils:
         return self._series
 
     def freq(self) -> pl.DataFrame:
+        """
+        Frequency table for the Series.
+
+        :return: The frequency table.
+        :rtype: pl.DataFrame
+        """
         tot = self._series.shape[0]
         counter = (
             self._series.value_counts()
@@ -118,10 +152,28 @@ class RaffaPolarsSeriesUtils:
     def crosstab(
         self, ser_b: pl.Series, perc: PercOptions = PercOptions.NO
     ) -> pl.DataFrame:
+        """
+        Cross table with another Series.
+
+        :param ser_b: The other Series
+        :type ser_b: pl.Series
+        :param perc: How to calculate percentages
+        :type perc: PercOptions
+        :return: The cross table.
+        :rtype: pl.DataFrame
+        """
         df = pl.DataFrame({self._series.name: self._series, ser_b.name: ser_b})
         return df.raffa.crosstab(self._series.name, ser_b.name, perc=perc)
 
+# --- DATAFRAME --- #
 
+try:
+    # delete the accessor to avoid warning
+    # See: https://stackoverflow.com/questions/69720999/how-to-prevent-pandas-accessor-to-issue-override-warning
+    del pl.DataFrame.raffa
+except AttributeError:
+    pass
+    
 @pl.api.register_dataframe_namespace("raffa")
 class RaffaPolarsDataFrameUtils:
     
@@ -164,7 +216,6 @@ class RaffaPolarsDataFrameUtils:
             return self._df
         initial_shape = self._df.config_meta.get_metadata()["initial_shape"]
         
-        custom_msg = self._df.config_meta.get_metadata()["custom_msg"]
         if custom_msg is None:
             custom_msg = ""
         else:
@@ -245,7 +296,7 @@ class RaffaPolarsDataFrameUtils:
 
         return ct.with_columns(values / options[perc] * 100)
 
-    def join(self, df2:pl.DataFrame, *args, keep_row_index: bool = False, log_col_changes=False, **kwargs):
+    def join(self, df2:pl.DataFrame, *args, keep_row_index: bool = False, **kwargs):
         """
         Wrapper around `pl.DataFrame.join` to log join operations.
 
@@ -255,8 +306,6 @@ class RaffaPolarsDataFrameUtils:
         :type *args: Any
         :param keep_row_index: Whether to keep columns indicating the row index of the source table in the output table
         :type keep_row_index: bool
-        :param log_col_changes: Whether to log column changes
-        :type log_col_changes: bool
         :param *kwargs: Additional keyword arguments passed to `pl.DataFrame.join`
         :type *kwargs: Any
         :return: The joined DataFrame
@@ -298,18 +347,18 @@ class RaffaPolarsDataFrameUtils:
         n_right_only = joined.filter(
             pl.col(left_col).is_null(), ~pl.col(right_col).is_null()
         ).shape[0]
+        left_dropped = set(df1.get_column(left_col).to_list()) - set(joined.get_column(left_col).to_list())
+        n_left_dropped = len(left_dropped)
+        right_dropped = set(df2.get_column(right_col).to_list()) - set(joined.get_column(right_col).to_list())
+        n_right_dropped = len(right_dropped)
         # Log rows information
         msg = f"Total rows in output table: {n_rows_joined:,d}\n"
         msg += f"From left only: {n_left_only:,d}/{n_rows_joined:,d} ({n_left_only / n_rows_joined:.2%})\n"
         msg += f"From right only: {n_right_only:,d}/{n_rows_joined:,d} ({n_right_only / n_rows_joined:.2%})\n"
         msg += f"From both: {n_both:,d}/{n_rows_joined:,d} ({n_both / n_rows_joined:.2%}) (left dups {n_left_dups}, right dups {n_right_dups})\n"
-        # Detect added and removed columns
-        if log_col_changes:
-            cols_out = set(joined.columns)
-            cols_left = set(df1.columns)
-            cols_right = set(df2.columns)
-            msg += f"Columns in output table not in left table: {cols_out - cols_left})\n"
-            msg += f"Columns in output table not in right table: {cols_out - cols_right})"
+        msg += f"Dropped rows from left: {n_left_dropped:,d}/{df1.shape[0]:,d} ({n_left_dropped / df1.shape[0]:.2%})\n"
+        msg += f"Dropped rows from right: {n_right_dropped:,d}/{df2.shape[0]:,d} ({n_right_dropped / df2.shape[0]:.2%})\n"
+        # Log
         logger.info(msg)
         # Drop row indices
         if not keep_row_index:
@@ -317,9 +366,41 @@ class RaffaPolarsDataFrameUtils:
         else:
             joined = joined.permute.append([left_col, right_col])
         return joined
+        
+    def to_docx(self, outfp: Path, *args, **kwargs):
+        """
+        Export table in Word .docx file.
 
-if __name__ == "__main__":
-    # Run with `uv run python -P polars.py -v`
-    import doctest
-    #doctest.testmod(optionflags=doctest.REPORT_NDIFF)
-    doctest.testmod()
+        :param outfp: The output file
+        :type outfp: Path
+        :param *args: Positional arguments to pass to DocxFile::add_table
+        :type *args: bool
+        :param **kwargs: Keyword arguments to pass to DocxFile::add_table
+        :type **kwargs: bool
+        :return: None
+        :rtype: None
+        """
+        df = self._df
+
+        # Create table
+        # See: https://stackoverflow.com/a/40597684/1719931
+        # First row is for the table header (i.e., column names)
+        n_rows, n_cols = df.shape[0] + 1, df.shape[1]
+
+        # Create table object
+        doc = DocxFile(*args, **kwargs)
+        doc.add_table(n_rows, n_cols, *args, **kwargs)
+        t = doc.table
+
+        # add the header row (column names)
+        for j in range(df.shape[1]):
+            t.cell(0, j).text = str(df.columns[j])
+
+        # add the rest of the data frame
+        values = df.to_numpy()
+        for i in range(df.shape[0]):
+            for j in range(df.shape[1]):
+                t.cell(i + 1, j).text = str(values[i, j])
+
+        # Save
+        doc.save(outfp)

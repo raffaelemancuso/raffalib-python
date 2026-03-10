@@ -1,8 +1,10 @@
+########
 Examples
-========
+########
 
+******
 pandas
-------
+******
 
 DataFrame example:
 
@@ -49,8 +51,12 @@ Shape is the same. No value-level comparison done because clone=False was used i
 >>> _ = s.raffa.startlog(clone=True).fillna(0).raffa.endlog()
 Changed 2/344 (0.58%) values.
 
+******
 polars
-------
+******
+
+Logging
+=======
 
 Let' import the libraries and create a logger:
 
@@ -63,8 +69,7 @@ Let' import the libraries and create a logger:
 Let's load a dataset
 
 >>> df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
->>> df = df.raffa.startlog(clone=True).raffa.replace_string_with_null("NA").raffa.endlog(timeit=False)
-Changed 19/2,752 (0.69%) values.
+>>> df = df.raffa.replace_string_with_null("NA")
 >>> df = df.with_columns(pl.col(["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]).cast(pl.Float32).name.keep())
 >>> df.head()
 shape: (5, 8)
@@ -80,7 +85,8 @@ shape: (5, 8)
 │ Adelie  ┆ Torgersen ┆ 36.700001      ┆ 19.299999     ┆ 193.0             ┆ 3,450.0     ┆ female ┆ 2,007 │
 └─────────┴───────────┴────────────────┴───────────────┴───────────────────┴─────────────┴────────┴───────┘
 
-Let's see some data wrangling on this data: remove rows with null values, filtering certain values, or selecting certain columns:
+Let's see some data wrangling on this data: remove rows with null values, filtering certain values, or selecting certain columns.
+The number of rows / columns changed is logged.
 
 >>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
 Removed 2/344 (0.58%) rows.
@@ -90,27 +96,66 @@ Removed 192/344 (55.81%) rows.
 Removed 2/8 (25.00%) columns.
 
 Operations that do not change the shape of the DataFrame but only its values requires `clone=True`
-in the `startlog` call to clone the entire initial dataframe for further comparison:
+in the `startlog` call to clone the entire initial dataframe for further comparisons:
 
 >>> _ = df.raffa.startlog().fill_null(0).raffa.endlog(timeit=False)
 Shape is the same. No value-level comparison done because clone=False was used in startlog().
 >>> _ = df.raffa.startlog(clone=True).fill_null("0").raffa.endlog(timeit=False)
 Changed 11/2,752 (0.40%) values.
 
-Let's see an example with joins:
+Joins
+=====
 
->>> df1 = pl.DataFrame({"left_a": ["A", "B", "B", "C", "D"], "left_b": ["a", "b1", "b2", "c", "d"]})
->>> df2 = pl.DataFrame({"right_a": ["A", "A", "A", "B", "E"], "right_d": ["alpha1", "alpha2", "alpha3", "beta", "gamma"]})
->>> _ = df1.raffa.join(df2, left_on="left_a", right_on="right_a", how="full", keep_row_index=False)
-Total rows in output table: 8
-From left only: 2/8 (25.00%)
-From right only: 1/8 (12.50%)
-From both: 5/8 (62.50%) (left dups 3, right dups 2)
->>> _ = df1.raffa.join(df2, left_on="left_a", right_on="right_a", how="left", keep_row_index=False)
-Total rows in output table: 7
-From left only: 2/7 (28.57%)
-From right only: 0/7 (0.00%)
-From both: 5/7 (71.43%) (left dups 3, right dups 2)
+Let's see an example with joins.
+
+>>> df1 = pl.DataFrame({"A": ["a1", "a2", "a3", "a4"], "B": ["b1", "b2", "b3", "b4"]})
+>>> df2 = pl.DataFrame({"A": ["a1", "a2", "a3", "a5", "a6"], "C": ["c1", "c2", "c3", "c5", "c6"]})
+
+Mutating joins
+--------------
+
+Outer join:
+
+>>> _ = df1.raffa.join(df2, on="A", how="outer")
+Total rows in output table: 6
+From left only: 1/6 (16.67%)
+From right only: 2/6 (33.33%)
+From both: 3/6 (50.00%) (left dups 0, right dups 0)
+Dropped rows from left: 0/4 (0.00%)
+Dropped rows from right: 0/5 (0.00%)
+
+Inner join:
+
+>>> _ = df1.raffa.join(df2, on="A", how="inner")
+Total rows in output table: 3
+From left only: 0/3 (0.00%)
+From right only: 0/3 (0.00%)
+From both: 3/3 (100.00%) (left dups 0, right dups 0)
+Dropped rows from left: 1/4 (25.00%)
+Dropped rows from right: 2/5 (40.00%)
+
+Left join:
+
+>>> _ = df1.raffa.join(df2, on="A", how="left")
+Total rows in output table: 4
+From left only: 1/4 (25.00%)
+From right only: 0/4 (0.00%)
+From both: 3/4 (75.00%) (left dups 0, right dups 0)
+Dropped rows from left: 0/4 (0.00%)
+Dropped rows from right: 2/5 (40.00%)
+
+Right join:
+
+>>> _ = df1.raffa.join(df2, on="A", how="right")
+Total rows in output table: 5
+From left only: 0/5 (0.00%)
+From right only: 2/5 (40.00%)
+From both: 3/5 (60.00%) (left dups 0, right dups 0)
+Dropped rows from left: 1/4 (25.00%)
+Dropped rows from right: 0/5 (0.00%)
+
+Filtering joins
+---------------
 
 Filtering joins are automatically detected:
 
@@ -118,3 +163,11 @@ Filtering joins are automatically detected:
 Detected filtering join. Rows variation -2/5 (-40.00%), total rows after join: 3/5 (60.00%)
 >>> _ = df1.raffa.join(df2, left_on="left_a", right_on="right_a", how="anti", keep_row_index=False)
 Detected filtering join. Rows variation -3/5 (-60.00%), total rows after join: 2/5 (40.00%)
+
+Word export
+===========
+
+Let's export a DataFrame in a Word ``.docx`` file:
+
+>>> df = pl.DataFrame({"a": [1,2,3], "b":["AAA", "BBB", "CCC"]})
+>>> df.raffa.to_docx("main.docx")

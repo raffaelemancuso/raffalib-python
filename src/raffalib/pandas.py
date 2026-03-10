@@ -22,7 +22,7 @@ import pandas as pd
 import logging
 from natsort import natsorted
 from pathlib import Path
-from .export_docx import prepare_docx, DocxOptions, table_autofit_hotfix
+from .export_docx import DocxFile
 
 logger = logging.getLogger(__name__)
 
@@ -104,10 +104,10 @@ class RaffaSeries:
         del self._series._initial_shape
         return self._series
 
-    def freq(self, dropna:bool=False) -> pd.DataFrame:
+    def freq(self, dropna: bool = False) -> pd.DataFrame:
         """
         Generate frequency table for this series
-        
+
         :param dropna: Whether to drop missing values before generating frequency table
         :type dropna: bool
         :return: A DataFrame with frequency table
@@ -212,7 +212,7 @@ class RaffaDataFrame:
     def add_prefix_if_not_exists(df, prefix: str) -> pd.DataFrame:
         """
         Add a prefix to all column names that do not already have it.
-        
+
         :param prefix: The prefix to add
         :type prefix: str
         """
@@ -224,20 +224,23 @@ class RaffaDataFrame:
         return df._df.rename(columns=new_cols)
 
     def get_duplicates(self, *args, **kwargs):
+        """
+        Alias for `df[df.duplicated(*args, **kwargs)]`.
+        """
         mask = self._df.duplicated(*args, **kwargs)
         return self._df[mask]
 
     def sort_columns(self) -> pd.DataFrame:
         """
-        Sort columns using natural sorting
+        Sort columns using natural sorting.
         """
         self._df = self._df[natsorted(self._df.columns)]
         return self._df
 
-    def freq(self, colname: str, dropna:bool=False) -> pd.DataFrame:
+    def freq(self, colname: str, dropna: bool = False) -> pd.DataFrame:
         """
         Generate frequency table for a variable.
-        
+
         :param colname: The name of the column holding the variable
         :type colname: str
         :param dropna: Whether to drop missing values before generating frequency table
@@ -247,27 +250,35 @@ class RaffaDataFrame:
         """
         return self._df[colname].raffa.freq()
 
-    def to_docx(
-        self,
-        outfp: Path,
-        include_index: bool = True,
-        docx_options: DocxOptions = DocxOptions(),
-        table_style: str = "Table Grid",
-        autofit: bool = True,
-    ):
-        # See: https://stackoverflow.com/a/40597684/1719931
+    def to_docx(self, outfp: Path, include_index: bool = True, *args, **kwargs):
+        """
+        Export table in Word .docx file.
 
+        :param outfp: The output file
+        :type outfp: Path
+        :param include_index: Whether to export the index
+        :type include_index: bool
+        :param *args: Positional arguments to pass to DocxFile::add_table
+        :type *args: bool
+        :param **kwargs: Keyword arguments to pass to DocxFile::add_table
+        :type **kwargs: bool
+        :return: None
+        :rtype: None
+        """
+        
         df = self._df
 
-        doc = prepare_docx(docx_options)
-
         # Create table
-        # One row is for the headers (i.e. columns names)
+        # See: https://stackoverflow.com/a/40597684/1719931
+        # First row is for the table header (i.e., column names)
         n_rows, n_cols = df.shape[0] + 1, df.shape[1]
+        # If we write the index, the first column will be used for the index
         if include_index:
             n_cols += 1
-
-        t = doc.add_table(n_rows, n_cols)
+        # Create table object
+        doc = DocxFile(*args, **kwargs)
+        doc.add_table(n_rows, n_cols, *args, **kwargs)
+        t = doc.table
 
         # add the header rows.
         for j in range(df.shape[-1]):
@@ -291,13 +302,5 @@ class RaffaDataFrame:
                 else:
                     t.cell(i + 1, j).text = str(df.values[i, j])
 
-        if autofit:
-            t = table_autofit_hotfix(t)
-
-        # Set table style
-        # See: https://github.com/python-openxml/python-docx/issues/9
-        t.style = table_style
-
-        # save the doc
+        # Save
         doc.save(outfp)
-
