@@ -18,8 +18,26 @@ import functools
 from tqdm.auto import tqdm
 import itertools
 
+
 def tqdm_batch(items, batch_size):
-    return(functools.partial(tqdm,
-                             iterable=itertools.batched(items, batch_size),
-                             total=(len(items)//batch_size)
-                             ))
+    """
+    Create a progress bar wrapper that batches items.
+
+    :param items: The sized iterable to wrap with a progress bar.
+    :type items: Sized
+    :param batch_size: Number of items per batch.
+    :type batch_size: int
+    :return: A ``functools.partial`` object that, when called, returns a tqdm progress bar over batched items.
+    :rtype: functools.partial
+
+    :Example:
+
+    >>> for batch in tqdm_batch(my_list, 100)():
+    ...     process(batch)
+    """
+    n_batches = -(-len(items) // batch_size)  # ceil division
+    return functools.partial(
+        tqdm,
+        iterable=itertools.batched(items, batch_size),
+        total=n_batches,
+    )

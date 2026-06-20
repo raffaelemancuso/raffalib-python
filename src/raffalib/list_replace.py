@@ -14,8 +14,25 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
 def list_replace(lst, old, new):
-    """replace list elements (inplace)"""
+    """
+    Replace all occurrences of a value in a list (in place).
+
+    :param lst: The list to modify (modified in place).
+    :type lst: list
+    :param old: The value to replace.
+    :param new: The new value to insert.
+    :return: None
+    :rtype: None
+
+    :Example:
+
+    >>> lst = [1, 2, 3, 2, 4]
+    >>> list_replace(lst, 2, 5)
+    >>> lst
+    [1, 5, 3, 5, 4]
+    """
     i = -1
     try:
         while True:

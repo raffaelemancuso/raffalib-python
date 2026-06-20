@@ -17,29 +17,43 @@
 import sqlalchemy as sa
 from sqlalchemy.ext import compiler
 from sqlalchemy.schema import DDLElement
-from sqlalchemy.sql import table
+
 
 def duckdb_id_field(table_name: str):
+    """
+    Create an auto-incrementing ID column for DuckDB.
+
+    :param table_name: Name of the table (used to create the sequence name).
+    :type table_name: str
+    :return: A SQLAlchemy Column with auto-incrementing integer ID.
+    :rtype: sqlalchemy.Column
+    """
     sequence = sa.Sequence(f"{table_name}_id_seq")
     col = sa.Column(
-        'id',
+        "id",
         sa.Integer,
         sequence,
         server_default=sequence.next_value(),
         primary_key=True,
     )
-    return(col)
+    return col
+
 
 # VIEW
 # See: https://github.com/sqlalchemy/sqlalchemy/wiki/Views
 
+
 class CreateView(DDLElement):
+    """DDL element for creating a database view."""
+
     def __init__(self, name, selectable):
         self.name = name
         self.selectable = selectable
 
 
 class DropView(DDLElement):
+    """DDL element for dropping a database view."""
+
     def __init__(self, name):
         self.name = name
 
@@ -58,14 +72,43 @@ def _drop_view(element, compiler, **kw):
 
 
 def view_exists(ddl, target, connection, **kw):
+    """
+    Check if a view exists in the database.
+
+    :param ddl: The DDL element.
+    :param target: The target schema item.
+    :param connection: Database connection.
+    :param kw: Additional keyword arguments.
+    :return: True if the view exists, False otherwise.
+    :rtype: bool
+    """
     return ddl.name in sa.inspect(connection).get_view_names()
 
 
 def view_doesnt_exist(ddl, target, connection, **kw):
+    """
+    Check if a view does not exist in the database.
+
+    :param ddl: The DDL element.
+    :param target: The target schema item.
+    :param connection: Database connection.
+    :param kw: Additional keyword arguments.
+    :return: True if the view does not exist, False otherwise.
+    :rtype: bool
+    """
     return not view_exists(ddl, target, connection, **kw)
 
 
 def view(name, metadata, selectable):
+    """
+    Create a SQLAlchemy view with automatic create/drop DDL events.
+
+    :param name: Name of the view to create.
+    :param metadata: SQLAlchemy Metadata object.
+    :param selectable: A SELECT statement or query to use as the view definition.
+    :return: A SQLAlchemy table object representing the view.
+    :rtype: sqlalchemy.sql.expression.TableClause
+    """
 
     t = sa.table(
         name,
@@ -87,4 +130,3 @@ def view(name, metadata, selectable):
         DropView(name).execute_if(callable_=view_exists),
     )
     return t
-

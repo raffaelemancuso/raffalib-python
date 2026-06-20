@@ -20,9 +20,11 @@ Extensions for pandas
 
 import pandas as pd
 import logging
+import time
 from natsort import natsorted
 from pathlib import Path
 from .export_docx import DocxFile
+from . import _logutils
 
 logger = logging.getLogger(__name__)
 
@@ -38,52 +40,66 @@ except AttributeError:
 
 @pd.api.extensions.register_series_accessor("raffa")
 class RaffaSeries:
+    """
+    The ``.raffa`` accessor on a :class:`pandas.Series`.
+
+    Registered automatically when :mod:`raffalib.pandas` is imported. Provides
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`)
+    and a :meth:`freq` frequency table.
+    """
+
     def __init__(self, data):
         self._series = data
-        self._series._metadata += ["_initial_shape", "_initial_series"]
+        self._series._metadata += [
+            "_initial_shape",
+            "_initial_series",
+            "_start_time",
+        ]
 
     def startlog(self, clone=False):
         """
         Initialize the logger.
 
-        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :param clone: Whether to clone the Series. Takes more RAM but allows logging of changed values. Otherwise, only the changed shape is logged.
         :type clone: bool
         :return: The pandas Series for piping.
         :rtype: pd.Series
         """
         self._series._initial_shape = self._series.shape
+        self._series._start_time = time.perf_counter_ns()
         if clone:
             self._series._initial_series = self._series.copy()
         else:
             self._series._initial_series = None
         return self._series
 
-    def midlog(self, msg=""):
+    def midlog(self, custom_msg: str | None = None, timeit: bool = True):
         """
         Alias for `.endlog().startlog()`
         """
-        return self.endlog(msg).startlog()
+        return self.endlog(custom_msg, timeit=timeit).startlog()
 
-    def endlog(self, msg=""):
+    def endlog(self, custom_msg: str | None = None, timeit: bool = True):
         """
         Log changes to the Series.
 
-        :param msg: A custom message
-        :type msg: str
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
         :return: The pandas Series for piping.
         :rtype: pd.Series
         """
+        if custom_msg is None:
+            custom_msg = ""
+        else:
+            custom_msg += ". "
+        msg = f"{custom_msg}"
         initial_shape = self._series._initial_shape
         final_shape = self._series.shape
         if final_shape != initial_shape:
-            nrow0 = initial_shape[0]
-            nrow1 = final_shape[0]
-            dr = nrow0 - nrow1
-            if dr > 0:
-                msg += f"Removed {dr:,d}/{nrow0:,d} ({dr / nrow0:.2%}) values."
-            elif dr < 0:
-                dr = abs(dr)
-                msg += f"Added {dr:,d}/{nrow0:,d} ({dr / nrow0:.2%}) values."
+            dr = initial_shape[0] - final_shape[0]
+            msg += _logutils.count_delta(dr, initial_shape[0], "values")
         else:
             if self._series._initial_series is not None:
                 nchanged = self._series != self._series._initial_series
@@ -92,16 +108,17 @@ class RaffaSeries:
                     False
                 )
                 nchanged = nchanged.sum()
-                if nchanged == 0:
-                    msg += "No changes detected."
-                else:
-                    ntot = self._series._initial_series.size
-                    msg += f"Changed {nchanged:,d}/{ntot:,d} ({nchanged / ntot:.2%}) values."
+                msg += _logutils.changed_cells(
+                    nchanged, self._series._initial_series.size
+                )
             else:
-                msg += "Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+                msg += _logutils.CLONE_FALSE_MSG
+        if timeit:
+            msg += _logutils.elapsed(self._series._start_time)
         logger.info(msg)
         del self._series._initial_series
         del self._series._initial_shape
+        del self._series._start_time
         return self._series
 
     def freq(self, dropna: bool = False) -> pd.DataFrame:
@@ -135,59 +152,67 @@ except AttributeError:
 # See: https://pandas.pydata.org/pandas-docs/stable/development/extending.html#registering-custom-accessors
 @pd.api.extensions.register_dataframe_accessor("raffa")
 class RaffaDataFrame:
+    """
+    The ``.raffa`` accessor on a :class:`pandas.DataFrame`.
+
+    Registered automatically when :mod:`raffalib.pandas` is imported. Provides
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`),
+    a logging :meth:`join` wrapper, a :meth:`freq` frequency table, and
+    :meth:`to_docx` export, plus small column helpers.
+    """
+
     def __init__(self, data: pd.DataFrame) -> None:
         self._df = data
         # See https://pandas.pydata.org/pandas-docs/stable/development/extending.html#define-original-properties
-        self._df._metadata += ["_initial_shape", "_initial_df"]
+        self._df._metadata += ["_initial_shape", "_initial_df", "_start_time"]
 
     def startlog(self, clone: bool = False) -> pd.DataFrame:
         """
         Initialize the logger.
 
-        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :param clone: Whether to clone the DataFrame. Takes more RAM but allows logging of changed values. Otherwise, only the changed shape is logged.
         :type clone: bool
         :return: The same DataFrame for piping.
         :rtype: pd.DataFrame
         """
         self._df._initial_shape = self._df.shape
+        self._df._start_time = time.perf_counter_ns()
         if clone:
             self._df._initial_df = self._df.copy()
         else:
             self._df._initial_df = None
         return self._df
 
-    def midlog(self, msg: str = "") -> pd.DataFrame:
+    def midlog(
+        self, custom_msg: str | None = None, timeit: bool = True
+    ) -> pd.DataFrame:
         """
         Alias for `.endlog().startlog()`
         """
-        return self.endlog(msg).startlog()
+        return self.endlog(custom_msg, timeit=timeit).startlog()
 
-    def endlog(self, msg: str = "") -> pd.DataFrame:
+    def endlog(
+        self, custom_msg: str | None = None, timeit: bool = True
+    ) -> pd.DataFrame:
         """
         Log changes to the DataFrame.
 
-        :param msg: A custom message
-        :type msg: str
-        :return: The pandas Series for piping.
-        :rtype: pd.Series
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :return: The DataFrame for piping.
+        :rtype: pd.DataFrame
         """
+        if custom_msg is None:
+            custom_msg = ""
+        else:
+            custom_msg += ". "
+        msg = f"{custom_msg}"
         final_shape = self._df.shape
         initial_shape = self._df._initial_shape
         if final_shape != initial_shape:
-            nrow0, ncol0 = initial_shape
-            nrow1, ncol1 = final_shape
-            dr = nrow0 - nrow1
-            dc = ncol0 - ncol1
-            if dr > 0:
-                msg += f"Removed {dr:,d}/{nrow0:,d} ({dr / nrow0:.2%}) rows."
-            elif dr < 0:
-                dr = abs(dr)
-                msg += f"Added {dr:,d}/{nrow0:,d} ({dr / nrow0:.2%}) rows."
-            if dc > 0:
-                msg += f"Removed {dc:,d}/{ncol0:,d} ({dc / ncol0:.2%}) columns."
-            elif dc < 0:
-                dc = abs(dc)
-                msg += f"Added {dc:,d}/{ncol0:,d} ({dc / ncol0:.2%}) columns."
+            msg += _logutils.dataframe_shape_delta(initial_shape, final_shape)
         else:
             initial_df = self._df._initial_df
             if initial_df is not None:
@@ -197,19 +222,18 @@ class RaffaDataFrame:
                 nchanged[self._df.isna() & initial_df.isna()] = False
                 # Get total number of cells that have changed
                 nchanged = nchanged.sum().sum()
-                if nchanged == 0:
-                    msg += "No changes detected."
-                else:
-                    ntot = initial_df.size
-                    msg += f"Changed {nchanged:,d}/{ntot:,d} ({nchanged / ntot:.2%}) values."
+                msg += _logutils.changed_cells(nchanged, initial_df.size)
             else:
-                msg += "Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+                msg += _logutils.CLONE_FALSE_MSG
+        if timeit:
+            msg += _logutils.elapsed(self._df._start_time)
         logger.info(msg)
         del self._df._initial_df
         del self._df._initial_shape
+        del self._df._start_time
         return self._df
 
-    def add_prefix_if_not_exists(df, prefix: str) -> pd.DataFrame:
+    def add_prefix_if_not_exists(self, prefix: str) -> pd.DataFrame:
         """
         Add a prefix to all column names that do not already have it.
 
@@ -218,10 +242,10 @@ class RaffaDataFrame:
         """
         new_cols = {
             col: f"{prefix}{col}"
-            for col in df._df.columns
+            for col in self._df.columns
             if not col.startswith(prefix)
         }
-        return df._df.rename(columns=new_cols)
+        return self._df.rename(columns=new_cols)
 
     def get_duplicates(self, *args, **kwargs):
         """
@@ -237,6 +261,95 @@ class RaffaDataFrame:
         self._df = self._df[natsorted(self._df.columns)]
         return self._df
 
+    def join(self, df2: pd.DataFrame, *args, keep_row_index: bool = False, **kwargs):
+        """
+        Wrapper around `pd.DataFrame.merge` to log join operations.
+
+        :param df2: The dataframe on the right of the join
+        :type df2: pd.DataFrame
+        :param args: Additional positional arguments passed to `pd.DataFrame.merge`
+        :type args: Any
+        :param keep_row_index: Whether to keep columns indicating the row index of the source table in the output table
+        :type keep_row_index: bool
+        :param kwargs: Additional keyword arguments passed to `pd.DataFrame.merge`
+        :type kwargs: Any
+        :return: The joined DataFrame
+        :rtype: pd.DataFrame
+        """
+
+        left_col = "source_left"
+        right_col = "source_right"
+        # Get DataFrames to join, add source row-index column
+        df1 = self._df.copy()
+        df1[left_col] = range(len(df1))
+        df2 = df2.copy()
+        df2[right_col] = range(len(df2))
+        # Check whether this is a filtering join
+        # Filtering joins filter rows from the left table based on the presence or
+        # absence of matches in the right table:
+        # "semi" returns all rows from the left with a match in the right.
+        # "anti" returns all rows from the left without a match in the right.
+        how = kwargs.get("how", "inner")
+        is_filter = how in ["anti", "semi"]
+        # If this is a filtering join, log only the rows variation in the left table
+        if is_filter:
+            # pandas has no native semi/anti join, so emulate it: an inner merge
+            # tells us which left rows have at least one match in the right table.
+            match_kwargs = {k: v for k, v in kwargs.items() if k != "how"}
+            matched = df1.merge(df2, *args, how="inner", **match_kwargs)[
+                left_col
+            ].unique()
+            mask = df1[left_col].isin(matched)
+            if how == "anti":
+                mask = ~mask
+            joined = df1[mask]
+            n_initial = df1.shape[0]
+            n_rows_joined = joined.shape[0]
+            n_var = n_rows_joined - n_initial
+            logger.info(
+                f"Detected filtering join. "
+                f"Rows variation {_logutils.ratio(n_var, n_initial)}, "
+                f"total rows after join: {_logutils.ratio(n_rows_joined, n_initial)}"
+            )
+            return joined.drop(columns=[left_col])
+        # pandas uses "outer" where polars uses "full"
+        if how == "full":
+            kwargs = {**kwargs, "how": "outer"}
+        # Join DataFrames
+        joined = df1.merge(df2, *args, **kwargs)
+        n_rows_joined = joined.shape[0]
+        # Detect how many rows in the output table are present in the input tables
+        joined_both = joined[joined[left_col].notna() & joined[right_col].notna()]
+        n_both = joined_both.shape[0]
+        n_left_dups = int(joined_both[left_col].duplicated(keep=False).sum())
+        n_right_dups = int(joined_both[right_col].duplicated(keep=False).sum())
+        n_left_only = joined[
+            joined[left_col].notna() & joined[right_col].isna()
+        ].shape[0]
+        n_right_only = joined[
+            joined[left_col].isna() & joined[right_col].notna()
+        ].shape[0]
+        left_dropped = set(df1[left_col]) - set(joined[left_col].dropna())
+        n_left_dropped = len(left_dropped)
+        right_dropped = set(df2[right_col]) - set(joined[right_col].dropna())
+        n_right_dropped = len(right_dropped)
+        # Log rows information
+        msg = f"Total rows in output table: {n_rows_joined:,d}\n"
+        msg += f"From left only: {_logutils.ratio(n_left_only, n_rows_joined)}\n"
+        msg += f"From right only: {_logutils.ratio(n_right_only, n_rows_joined)}\n"
+        msg += f"From both: {_logutils.ratio(n_both, n_rows_joined)} (left dups {n_left_dups}, right dups {n_right_dups})\n"
+        msg += f"Dropped rows from left: {_logutils.ratio(n_left_dropped, df1.shape[0])}\n"
+        msg += f"Dropped rows from right: {_logutils.ratio(n_right_dropped, df2.shape[0])}\n"
+        # Log
+        logger.info(msg)
+        # Drop or relocate row indices
+        if not keep_row_index:
+            joined = joined.drop(columns=[left_col, right_col])
+        else:
+            cols = [c for c in joined.columns if c not in (left_col, right_col)]
+            joined = joined[cols + [left_col, right_col]]
+        return joined
+
     def freq(self, colname: str, dropna: bool = False) -> pd.DataFrame:
         """
         Generate frequency table for a variable.
@@ -248,9 +361,9 @@ class RaffaDataFrame:
         :return: A DataFrame with the frequency table
         :rtype: pd.DataFrame
         """
-        return self._df[colname].raffa.freq()
+        return self._df[colname].raffa.freq(dropna=dropna)
 
-    def to_docx(self, outfp: Path, include_index: bool = True, *args, **kwargs):
+    def to_docx(self, outfp: Path, include_index: bool = True, **kwargs):
         """
         Export table in Word .docx file.
 
@@ -258,14 +371,14 @@ class RaffaDataFrame:
         :type outfp: Path
         :param include_index: Whether to export the index
         :type include_index: bool
-        :param *args: Positional arguments to pass to DocxFile::add_table
-        :type *args: bool
-        :param **kwargs: Keyword arguments to pass to DocxFile::add_table
-        :type **kwargs: bool
+        :param kwargs: Options forwarded to :class:`~raffalib.export_docx.DocxFile`
+            (document/heading options such as ``heading_text`` or ``landscape``) or
+            to its ``add_table`` method (table options such as ``table_style`` or
+            ``table_font_size``).
         :return: None
         :rtype: None
         """
-        
+
         df = self._df
 
         # Create table
@@ -275,9 +388,8 @@ class RaffaDataFrame:
         # If we write the index, the first column will be used for the index
         if include_index:
             n_cols += 1
-        # Create table object
-        doc = DocxFile(*args, **kwargs)
-        doc.add_table(n_rows, n_cols, *args, **kwargs)
+        # Create document with table
+        doc = DocxFile.with_table(n_rows, n_cols, **kwargs)
         t = doc.table
 
         # add the header rows.

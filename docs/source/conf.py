@@ -31,6 +31,20 @@ extensions = [
 
 autoapi_dirs = ['../../src']
 
+# Document the class docstring and the __init__ docstring together.
+autoapi_python_class_content = "both"
+
+# Keep the default options but drop "imported-members": the package re-exports
+# (e.g. ``raffalib.list_replace``) would otherwise be documented both on the
+# package page and on their own module page, producing duplicate-object warnings.
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+    "special-members",
+]
+
 exclude_patterns = ['_build', '_templates']
 
 # Add any paths that contain templates here, relative to this directory.

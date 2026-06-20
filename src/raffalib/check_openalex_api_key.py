@@ -19,22 +19,29 @@ import logging
 import pyalex
 import datetime
 
+
 def check_openalex_api_key():
-    """Check if the API key is valid."""
+    """
+    Check if the OpenAlex API key is valid.
+
+    :return: True if the API key is valid (can access the API), False if access is denied (403).
+    :rtype: bool
+    :raises requests.exceptions.HTTPError: For HTTP errors other than 403.
+
+    .. note::
+        Requires the pyalex package and a valid OPENALEX_API_KEY environment variable.
+    """
     bk_cods = pyalex.config.retry_http_codes
     pyalex.config.retry_http_codes = None
     dt = f"{datetime.datetime.now().year}-01-01"
-    res = None
     try:
         pyalex.Works().filter(from_updated_date=dt).get()
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 403:
-            res = False
-        else:
-            logging.error(f"Unexpected HTTP error: {e}")
-            raise
+            return False
+        logging.error(f"Unexpected HTTP error: {e}")
+        raise
     else:
-        res = True
+        return True
     finally:
         pyalex.config.retry_http_codes = bk_cods
-        return res

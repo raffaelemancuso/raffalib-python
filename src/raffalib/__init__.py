@@ -15,11 +15,15 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-My library
+raffalib-python: A library with helper functions for pandas, polars, selenium, and others.
+
+This library enriches pandas and polars with STATA-like logging and .docx export capabilities.
+It also provides utilities for backup files, logging configuration, progress bars, and more.
 """
 
-#from .check_openalex_api_key import check_openalex_api_key
+# from .check_openalex_api_key import check_openalex_api_key
 from .tqdm import tqdm_batch
-from .make_backup_file import make_backup_file
 from .logging import create_logger
 from .list_replace import list_replace
+
+__all__ = ["tqdm_batch", "create_logger", "list_replace"]

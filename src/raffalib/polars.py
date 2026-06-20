@@ -16,24 +16,35 @@
 
 import polars as pl
 import polars.selectors as cs
-import polars_config_meta
-import polars_permute
+import polars_config_meta  # noqa: F401  registers the `config_meta` namespace on import
+import polars_permute  # noqa: F401  registers the `permute` namespace (used by join)
+
 from .export_docx import DocxFile
+from . import _logutils
 from enum import Enum, auto
 import logging
-import copy
 import time
-import datetime
-import humanize
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 pl.Config(thousands_separator=",")
 
+
 class PercOptions(Enum):
+    """
+    How :meth:`RaffaPolarsDataFrameUtils.crosstab` should express its counts.
+
+    :cvar NO: Report raw counts (no percentages).
+    :cvar TOTAL: Each cell as a percentage of the grand total.
+    :cvar COLUMNS: Each cell as a percentage of its column total.
+    :cvar ROWS: Each cell as a percentage of its row total.
+    """
+
     NO = auto()
     TOTAL = auto()
     COLUMNS = auto()
     ROWS = auto()
+
 
 # --- SERIES --- #
 
@@ -44,21 +55,30 @@ try:
 except AttributeError:
     pass
 
+
 @pl.api.register_series_namespace("raffa")
 class RaffaPolarsSeriesUtils:
+    """
+    The ``.raffa`` namespace on a :class:`polars.Series`.
+
+    Registered automatically when :mod:`raffalib.polars` is imported. Provides
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog`) and tabulation
+    helpers (:meth:`freq`, :meth:`crosstab`).
+    """
+
     def __init__(self, series: pl.Series):
         self._series = series
-        
+
     def startlog(self, clone=False):
         """
         Initialize the logger.
 
-        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :param clone: Whether to clone the Series. Takes more RAM but allows logging of changed values. Otherwise, only the changed shape is logged.
         :type clone: bool
-        :return: The same DataFrame for piping.
-        :rtype: pl.DataFrame
+        :return: The same Series for piping.
+        :rtype: pl.Series
         """
-        
+
         self._series.config_meta.set(old_shape=self._series.shape)
         self._series.config_meta.set(start_time=time.perf_counter_ns())
         if clone:
@@ -67,21 +87,19 @@ class RaffaPolarsSeriesUtils:
             self._series.config_meta.set(old_series=None)
         return self._series
 
-    def endlog(self, custom_msg:str|None = None, timeit:bool=True) -> pl.Series:
+    def endlog(self, custom_msg: str | None = None, timeit: bool = True) -> pl.Series:
         """
         Log changes to the Series.
 
-        :param msg: A custom message to log before the actual log
-        :type msg: str
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
         :param timeit: Log the time it took for the operation
         :type timeit: bool
         :return: The Series for piping.
         :rtype: pl.Series
         """
-        if "old_shape" not in self._df._series.get_metadata():
-            logger.info(
-                "You have to call startlog() before calling endlog()."
-            )
+        if "old_shape" not in self._series.config_meta.get_metadata():
+            logger.info("You have to call startlog() before calling endlog().")
             return self._series
 
         if custom_msg is None:
@@ -89,38 +107,26 @@ class RaffaPolarsSeriesUtils:
         else:
             custom_msg += ". "
         msg = f"{custom_msg}"
-        
+
         start_time = self._series.config_meta.get_metadata()["start_time"]
         old_shape = self._series.config_meta.get_metadata()["old_shape"]
         new_shape = self._series.shape
-        
+
         if new_shape != old_shape:
-            dr = new_shape[0] - old_shape[0]
-            msg = (
-                f"{custom_msg}"
-                f"Variation: {dr:,d}/{old_shape[0]:,d} ({dr / old_shape[0]:.2%}).\n"
-            )
-            
+            dr = old_shape[0] - new_shape[0]
+            msg += _logutils.count_delta(dr, old_shape[0], "values")
         else:
             old_series = self._series.config_meta.get_metadata()["old_series"]
             if old_series is None:
-                msg += f"Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+                msg += _logutils.CLONE_FALSE_MSG
             else:
-                a = (self._df != old_series).fill_null(False).to_numpy()
-                b = (
-                    self._df.with_columns(pl.all().is_null())
-                    != old_series.with_columns(pl.all().is_null())
-                ).to_numpy()
-                n_changed = (a | b).sum()
-                n_values = old_shape[0]
-                msg += f"Shape is the same. Values changed: {n_changed:,d}/{n_values:,d} ({n_changed / n_values:.2%})."
-        
+                # ne_missing treats null == null as equal and null vs value as changed
+                n_changed = self._series.ne_missing(old_series).sum()
+                msg += _logutils.changed_cells(n_changed, old_shape[0])
+
         if timeit:
-            end_time = time.perf_counter_ns()
-            elapsed = end_time - start_time
-            diff = datetime.timedelta(microseconds=elapsed / 1000)
-            msg += "\nTook: " + humanize.precisedelta(diff)
-            
+            msg += _logutils.elapsed(start_time)
+
         logger.info(msg)
         return self._series
 
@@ -165,6 +171,7 @@ class RaffaPolarsSeriesUtils:
         df = pl.DataFrame({self._series.name: self._series, ser_b.name: ser_b})
         return df.raffa.crosstab(self._series.name, ser_b.name, perc=perc)
 
+
 # --- DATAFRAME --- #
 
 try:
@@ -173,10 +180,19 @@ try:
     del pl.DataFrame.raffa
 except AttributeError:
     pass
-    
+
+
 @pl.api.register_dataframe_namespace("raffa")
 class RaffaPolarsDataFrameUtils:
-    
+    """
+    The ``.raffa`` namespace on a :class:`polars.DataFrame`.
+
+    Registered automatically when :mod:`raffalib.polars` is imported. Provides
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog`), a logging
+    :meth:`join` wrapper, tabulation helpers (:meth:`freq`, :meth:`crosstab`),
+    and :meth:`to_docx` export.
+    """
+
     def __init__(self, df: pl.DataFrame):
         self._df = df
 
@@ -184,65 +200,54 @@ class RaffaPolarsDataFrameUtils:
         """
         Initialize the logger.
 
-        :param clone: Whether to clone the series. Takes more RAM but allows logging of changed values. Otherwise, only changed shapes is logged.
+        :param clone: Whether to clone the DataFrame. Takes more RAM but allows logging of changed values. Otherwise, only the changed shape is logged.
         :type clone: bool
         :return: The same DataFrame for piping.
         :rtype: pl.DataFrame
         """
-        
-        self._df.config_meta.set(initial_shape=self._df.shape, start_time=time.perf_counter_ns())
+
+        self._df.config_meta.set(
+            initial_shape=self._df.shape, start_time=time.perf_counter_ns()
+        )
         if clone:
             self._df.config_meta.set(initial_df=self._df.clone())
         else:
             self._df.config_meta.set(initial_df=None)
         return self._df
 
-    def endlog(self, custom_msg:str|None = None, timeit:bool=True) -> pl.DataFrame:
+    def endlog(
+        self, custom_msg: str | None = None, timeit: bool = True
+    ) -> pl.DataFrame:
         """
         Log changes to the DataFrame.
 
-        :param msg: A custom message to log before the actual log
-        :type msg: str
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
         :param timeit: Log the time it took for the operation
         :type timeit: bool
         :return: The DataFrame for piping.
         :rtype: pl.DataFrame
         """
-        
+
         if "initial_shape" not in self._df.config_meta.get_metadata():
-            logger.info(
-                "You have to call startlog() before calling endlog()."
-            )
+            logger.info("You have to call startlog() before calling endlog().")
             return self._df
         initial_shape = self._df.config_meta.get_metadata()["initial_shape"]
-        
+
         if custom_msg is None:
             custom_msg = ""
         else:
             custom_msg += ". "
         msg = f"{custom_msg}"
         start_time = self._df.config_meta.get_metadata()["start_time"]
-        
+
         final_shape = self._df.shape
-        if(final_shape != initial_shape):
-            nrow0, ncol0 = initial_shape
-            nrow1, ncol1 = final_shape
-            dr = nrow0 - nrow1
-            dc = ncol0 - ncol1
-            if dr > 0:
-                msg += f"Removed {dr:,d}/{nrow0:,d} ({dr/nrow0:.2%}) rows."
-            elif dr < 0:
-                dr = abs(dr)
-                msg += f"Added {dr:,d}/{nrow0:,d} ({dr/nrow0:.2%}) rows."
-            if dc > 0:
-                msg += f"Removed {dc:,d}/{ncol0:,d} ({dc/ncol0:.2%}) columns."
-            elif dc < 0:
-                dc = abs(dc)
-                msg += f"Added {dc:,d}/{ncol0:,d} ({dc/ncol0:.2%}) columns."
+        if final_shape != initial_shape:
+            msg += _logutils.dataframe_shape_delta(initial_shape, final_shape)
         else:
             initial_df = self._df.config_meta.get_metadata()["initial_df"]
             if initial_df is None:
-                msg += "Shape is the same. No value-level comparison done because clone=False was used in startlog()."
+                msg += _logutils.CLONE_FALSE_MSG
             else:
                 a = (self._df != initial_df).fill_null(False).to_numpy()
                 b = (
@@ -250,31 +255,67 @@ class RaffaPolarsDataFrameUtils:
                     != initial_df.with_columns(pl.all().is_null())
                 ).to_numpy()
                 # Get total number of cells that have changed
-                nchanged = (a | b).sum().sum()   
-                if(nchanged == 0):
-                    msg += "No changes detected."
-                else:
-                    ntot = final_shape[0] * final_shape[1]
-                    msg += f"Changed {nchanged:,d}/{ntot:,d} ({nchanged/ntot:.2%}) values."
+                nchanged = (a | b).sum().sum()
+                ntot = final_shape[0] * final_shape[1]
+                msg += _logutils.changed_cells(nchanged, ntot)
         if timeit:
-            end_time = time.perf_counter_ns()
-            elapsed = end_time - start_time
-            diff = datetime.timedelta(microseconds=elapsed / 1000)
-            msg += "\nTook: " + humanize.precisedelta(diff)
+            msg += _logutils.elapsed(start_time)
         logger.info(msg)
         return self._df
-        
+
     def replace_string_with_null(self, s):
+        """
+        Replace a sentinel string with null across all string columns.
+
+        Useful for cleaning CSV files that encode missing values as a literal
+        string such as ``"NA"``.
+
+        :param s: The string value to replace with null.
+        :type s: str
+        :return: The DataFrame with matching string cells set to null.
+        :rtype: pl.DataFrame
+        """
         # self._df.with_columns(pl.col(pl.String).str.replace(s, None).name.keep())
-        self._df = self._df.with_columns(pl.when(pl.col(pl.String) == s).then(None).otherwise(pl.col(pl.String)).name.keep())
+        self._df = self._df.with_columns(
+            pl.when(pl.col(pl.String) == s)
+            .then(None)
+            .otherwise(pl.col(pl.String))
+            .name.keep()
+        )
         return self._df
-        
+
     def freq(self, col, *args, **kwargs) -> pl.DataFrame:
+        """
+        Frequency table for a single column.
+
+        Delegates to the :class:`polars.Series` ``raffa.freq`` accessor.
+
+        :param col: Name of the column to tabulate.
+        :type col: str
+        :param args: Extra positional arguments forwarded to the Series accessor.
+        :param kwargs: Extra keyword arguments forwarded to the Series accessor.
+        :return: A frequency table with ``value``, ``count`` and ``perc`` columns
+            plus a ``Total`` row.
+        :rtype: pl.DataFrame
+        """
         return self._df.get_column(col).raffa.freq(*args, **kwargs)
 
     def crosstab(
         self, col_a: str, col_b: str, perc: PercOptions = PercOptions.NO
     ) -> pl.DataFrame:
+        """
+        Cross-tabulation (contingency table) of two columns.
+
+        :param col_a: Column whose distinct values form the rows.
+        :type col_a: str
+        :param col_b: Column whose distinct values form the columns.
+        :type col_b: str
+        :param perc: Whether to report raw counts or percentages, and along which
+            axis. See :class:`PercOptions`. Defaults to ``PercOptions.NO``.
+        :type perc: PercOptions
+        :return: The cross table, one row per distinct value of ``col_a``.
+        :rtype: pl.DataFrame
+        """
         ct = self._df.pivot(
             on=col_b,
             index=col_a,
@@ -296,22 +337,22 @@ class RaffaPolarsDataFrameUtils:
 
         return ct.with_columns(values / options[perc] * 100)
 
-    def join(self, df2:pl.DataFrame, *args, keep_row_index: bool = False, **kwargs):
+    def join(self, df2: pl.DataFrame, *args, keep_row_index: bool = False, **kwargs):
         """
         Wrapper around `pl.DataFrame.join` to log join operations.
 
         :param df2: The dataframe on the right of the join
         :type df2: pl.DataFrame
-        :param *args: Additional position arguments passed to `pl.DataFrame.join`
-        :type *args: Any
+        :param args: Additional positional arguments passed to `pl.DataFrame.join`
+        :type args: Any
         :param keep_row_index: Whether to keep columns indicating the row index of the source table in the output table
         :type keep_row_index: bool
-        :param *kwargs: Additional keyword arguments passed to `pl.DataFrame.join`
-        :type *kwargs: Any
+        :param kwargs: Additional keyword arguments passed to `pl.DataFrame.join`
+        :type kwargs: Any
         :return: The joined DataFrame
         :rtype: pl.DataFrame
         """
-        
+
         left_col = "source_left"
         right_col = "source_right"
         # Get DataFrame to join, add source column
@@ -331,13 +372,15 @@ class RaffaPolarsDataFrameUtils:
             n_var = n_rows_joined - n_initial
             logger.info(
                 f"Detected filtering join. "
-                f"Rows variation {n_var:,d}/{n_initial:,d} ({n_var / n_initial:.2%}), "
-                f"total rows after join: {n_rows_joined:,d}/{n_initial:,d} ({n_rows_joined / n_initial:.2%})"
+                f"Rows variation {_logutils.ratio(n_var, n_initial)}, "
+                f"total rows after join: {_logutils.ratio(n_rows_joined, n_initial)}"
             )
             joined = joined.drop([left_col])
             return joined
         # Detect how many rows in the output table are present in the input tables
-        joined_both = joined.filter(~pl.col(left_col).is_null(), ~pl.col(right_col).is_null())
+        joined_both = joined.filter(
+            ~pl.col(left_col).is_null(), ~pl.col(right_col).is_null()
+        )
         n_both = joined_both.shape[0]
         n_left_dups = joined_both.get_column(left_col).is_duplicated().sum()
         n_right_dups = joined_both.get_column(right_col).is_duplicated().sum()
@@ -347,17 +390,21 @@ class RaffaPolarsDataFrameUtils:
         n_right_only = joined.filter(
             pl.col(left_col).is_null(), ~pl.col(right_col).is_null()
         ).shape[0]
-        left_dropped = set(df1.get_column(left_col).to_list()) - set(joined.get_column(left_col).to_list())
+        left_dropped = set(df1.get_column(left_col).to_list()) - set(
+            joined.get_column(left_col).to_list()
+        )
         n_left_dropped = len(left_dropped)
-        right_dropped = set(df2.get_column(right_col).to_list()) - set(joined.get_column(right_col).to_list())
+        right_dropped = set(df2.get_column(right_col).to_list()) - set(
+            joined.get_column(right_col).to_list()
+        )
         n_right_dropped = len(right_dropped)
         # Log rows information
         msg = f"Total rows in output table: {n_rows_joined:,d}\n"
-        msg += f"From left only: {n_left_only:,d}/{n_rows_joined:,d} ({n_left_only / n_rows_joined:.2%})\n"
-        msg += f"From right only: {n_right_only:,d}/{n_rows_joined:,d} ({n_right_only / n_rows_joined:.2%})\n"
-        msg += f"From both: {n_both:,d}/{n_rows_joined:,d} ({n_both / n_rows_joined:.2%}) (left dups {n_left_dups}, right dups {n_right_dups})\n"
-        msg += f"Dropped rows from left: {n_left_dropped:,d}/{df1.shape[0]:,d} ({n_left_dropped / df1.shape[0]:.2%})\n"
-        msg += f"Dropped rows from right: {n_right_dropped:,d}/{df2.shape[0]:,d} ({n_right_dropped / df2.shape[0]:.2%})\n"
+        msg += f"From left only: {_logutils.ratio(n_left_only, n_rows_joined)}\n"
+        msg += f"From right only: {_logutils.ratio(n_right_only, n_rows_joined)}\n"
+        msg += f"From both: {_logutils.ratio(n_both, n_rows_joined)} (left dups {n_left_dups}, right dups {n_right_dups})\n"
+        msg += f"Dropped rows from left: {_logutils.ratio(n_left_dropped, df1.shape[0])}\n"
+        msg += f"Dropped rows from right: {_logutils.ratio(n_right_dropped, df2.shape[0])}\n"
         # Log
         logger.info(msg)
         # Drop row indices
@@ -366,17 +413,17 @@ class RaffaPolarsDataFrameUtils:
         else:
             joined = joined.permute.append([left_col, right_col])
         return joined
-        
-    def to_docx(self, outfp: Path, *args, **kwargs):
+
+    def to_docx(self, outfp: Path, **kwargs):
         """
         Export table in Word .docx file.
 
         :param outfp: The output file
         :type outfp: Path
-        :param *args: Positional arguments to pass to DocxFile::add_table
-        :type *args: bool
-        :param **kwargs: Keyword arguments to pass to DocxFile::add_table
-        :type **kwargs: bool
+        :param kwargs: Options forwarded to :class:`~raffalib.export_docx.DocxFile`
+            (document/heading options such as ``heading_text`` or ``landscape``) or
+            to its ``add_table`` method (table options such as ``table_style`` or
+            ``table_font_size``).
         :return: None
         :rtype: None
         """
@@ -387,9 +434,8 @@ class RaffaPolarsDataFrameUtils:
         # First row is for the table header (i.e., column names)
         n_rows, n_cols = df.shape[0] + 1, df.shape[1]
 
-        # Create table object
-        doc = DocxFile(*args, **kwargs)
-        doc.add_table(n_rows, n_cols, *args, **kwargs)
+        # Create document with table
+        doc = DocxFile.with_table(n_rows, n_cols, **kwargs)
         t = doc.table
 
         # add the header row (column names)
