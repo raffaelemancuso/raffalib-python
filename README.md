@@ -16,8 +16,8 @@ API Reference
 ## Highlights
 
 - **STATA-like logging** — wrap a pandas/polars pipeline in `startlog()` / `endlog()`
-  and get a log line describing how many rows, columns, or cell values changed (and
-  optionally how long it took).
+  and get a log line describing how many rows, columns, or cell values changed (plus
+  the new shape when rows or columns are added/removed, and optionally how long it took).
 - **`.docx` export** — write any DataFrame straight to a Word table with `to_docx()`.
 - **Frequency & cross tables** — `freq()` and `crosstab()` accessors for quick
   tabulations.
@@ -79,7 +79,7 @@ df = pd.DataFrame(
 
 # Shape changes are logged automatically
 _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-# -> Removed 2/6 (33.33%) rows.
+# -> Removed 2/6 (33.33%) rows. New shape: (4, 3).
 
 # Pass clone=True to also detect value-level changes when the shape is unchanged
 _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
@@ -104,7 +104,7 @@ df = pl.DataFrame(
 )
 
 _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
-# -> Removed 3/6 (50.00%) rows.
+# -> Removed 3/6 (50.00%) rows. New shape: (3, 3).
 ```
 
 Both backends share the same `startlog(clone=False)` / `endlog(custom_msg=None, timeit=True)`

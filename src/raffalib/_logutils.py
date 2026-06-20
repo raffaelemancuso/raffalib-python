@@ -75,24 +75,61 @@ def count_delta(delta: int, total: int, unit: str) -> str:
     return ""
 
 
+def new_shape(shape: tuple[int, ...]) -> str:
+    """
+    Report the shape a DataFrame or Series has after rows or columns were
+    added or removed.
+
+    :param shape: The shape tuple after the operation (``(n,)`` for a Series,
+        ``(n_rows, n_cols)`` for a DataFrame).
+    :type shape: tuple[int, ...]
+    :return: A message like ``"New shape: (8, 6)."``.
+    :rtype: str
+    """
+    return f"New shape: {shape}."
+
+
+def series_shape_delta(initial_shape: tuple[int], final_shape: tuple[int]) -> str:
+    """
+    Describe how a Series' length changed and report its new shape.
+
+    :param initial_shape: ``(n,)`` before the operation.
+    :type initial_shape: tuple[int]
+    :param final_shape: ``(n,)`` after the operation.
+    :type final_shape: tuple[int]
+    :return: The value-count change followed by the new shape, or an empty
+        string when the length did not change.
+    :rtype: str
+    """
+    delta = count_delta(initial_shape[0] - final_shape[0], initial_shape[0], "values")
+    if not delta:
+        return ""
+    return f"{delta} {new_shape(final_shape)}"
+
+
 def dataframe_shape_delta(
     initial_shape: tuple[int, int], final_shape: tuple[int, int]
 ) -> str:
     """
-    Describe how a DataFrame's row and column counts changed.
+    Describe how a DataFrame's row and column counts changed and report its
+    new shape.
 
     :param initial_shape: ``(n_rows, n_cols)`` before the operation.
     :type initial_shape: tuple[int, int]
     :param final_shape: ``(n_rows, n_cols)`` after the operation.
     :type final_shape: tuple[int, int]
-    :return: The concatenated row and column change messages.
+    :return: The concatenated row and column change messages followed by the
+        new shape, or an empty string when neither changed.
     :rtype: str
     """
     nrow0, ncol0 = initial_shape
     nrow1, ncol1 = final_shape
-    return count_delta(nrow0 - nrow1, nrow0, "rows") + count_delta(
+    delta = count_delta(nrow0 - nrow1, nrow0, "rows") + count_delta(
         ncol0 - ncol1, ncol0, "columns"
     )
+    if not delta:
+        return ""
+    return f"{delta} {new_shape(final_shape)}"
 
 
 def changed_cells(nchanged: int, ntotal: int) -> str:

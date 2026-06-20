@@ -36,18 +36,43 @@ def test_count_delta_thousands_separator():
 
 def test_dataframe_shape_delta_rows_and_columns():
     msg = _logutils.dataframe_shape_delta((10, 5), (8, 6))
-    assert msg == "Removed 2/10 (20.00%) rows.Added 1/5 (20.00%) columns."
+    assert msg == (
+        "Removed 2/10 (20.00%) rows.Added 1/5 (20.00%) columns. New shape: (8, 6)."
+    )
 
 
 def test_dataframe_shape_delta_rows_only():
-    assert (
-        _logutils.dataframe_shape_delta((10, 5), (7, 5))
-        == "Removed 3/10 (30.00%) rows."
+    assert _logutils.dataframe_shape_delta((10, 5), (7, 5)) == (
+        "Removed 3/10 (30.00%) rows. New shape: (7, 5)."
     )
 
 
 def test_dataframe_shape_delta_no_change_is_empty():
     assert _logutils.dataframe_shape_delta((10, 5), (10, 5)) == ""
+
+
+def test_new_shape_dataframe():
+    assert _logutils.new_shape((8, 6)) == "New shape: (8, 6)."
+
+
+def test_new_shape_series():
+    assert _logutils.new_shape((8,)) == "New shape: (8,)."
+
+
+def test_series_shape_delta_removed():
+    assert _logutils.series_shape_delta((5,), (3,)) == (
+        "Removed 2/5 (40.00%) values. New shape: (3,)."
+    )
+
+
+def test_series_shape_delta_added():
+    assert _logutils.series_shape_delta((3,), (5,)) == (
+        "Added 2/3 (66.67%) values. New shape: (5,)."
+    )
+
+
+def test_series_shape_delta_no_change_is_empty():
+    assert _logutils.series_shape_delta((5,), (5,)) == ""
 
 
 def test_ratio_basic():

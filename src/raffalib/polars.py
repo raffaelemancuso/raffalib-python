@@ -109,8 +109,7 @@ class RaffaPolarsSeriesUtils:
         new_shape = self._series.shape
 
         if new_shape != old_shape:
-            dr = old_shape[0] - new_shape[0]
-            msg += _logutils.count_delta(dr, old_shape[0], "values")
+            msg += _logutils.series_shape_delta(old_shape, new_shape)
         else:
             old_series = self._series.config_meta.get_metadata()["old_series"]
             if old_series is None:

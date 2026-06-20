@@ -40,7 +40,10 @@ def test_endlog_removed_rows(caplog):
         df.raffa.startlog()
         df = df.filter(pl.col("a") > 1)
         df.raffa.endlog(timeit=False)
-    assert any("Removed 1/4 (25.00%) rows." in r.message for r in caplog.records)
+    assert any(
+        "Removed 1/4 (25.00%) rows. New shape: (3, 1)." in r.message
+        for r in caplog.records
+    )
 
 
 def test_series_endlog_matches_pandas_format(caplog):
@@ -49,7 +52,10 @@ def test_series_endlog_matches_pandas_format(caplog):
         s.raffa.startlog()
         s = s.filter(s > 2)
         s.raffa.endlog(timeit=False)
-    assert any("Removed 2/5 (40.00%) values." in r.message for r in caplog.records)
+    assert any(
+        "Removed 2/5 (40.00%) values. New shape: (3,)." in r.message
+        for r in caplog.records
+    )
 
 
 def test_endlog_timeit_appends_duration(caplog):
@@ -84,7 +90,9 @@ def test_endlog_add_rows_to_empty_frame_is_guarded(caplog):
         df.raffa.startlog()
         df = df.vstack(pl.DataFrame({"a": [1.0, 2.0, 3.0]}))
         df.raffa.endlog(timeit=False)
-    assert any("Added 3/0 (N/A) rows." in r.message for r in caplog.records)
+    assert any(
+        "Added 3/0 (N/A) rows. New shape: (3, 1)." in r.message for r in caplog.records
+    )
 
 
 def test_join_empty_output_does_not_divide_by_zero(caplog):

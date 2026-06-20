@@ -19,7 +19,8 @@ change logging to a Series or DataFrame.
 
 The pattern is always the same: call ``startlog()`` before an operation and
 ``endlog()`` after it. ``endlog`` logs how the data changed — rows or columns
-added/removed or, when the shape is unchanged, how many cell values changed.
+added/removed (followed by the resulting shape) or, when the shape is unchanged,
+how many cell values changed.
 
 ``startlog(clone=False)``
    Snapshots the current shape (and a timestamp). Pass ``clone=True`` to also
@@ -85,17 +86,17 @@ Removing rows, filtering, or dropping columns changes the shape, which is
 logged automatically:
 
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) rows.
+Removed 2/10 (20.00%) rows. New shape: (8, 8).
 >>> _ = df.raffa.startlog().query("species=='Adelie'").raffa.endlog(timeit=False)
-Removed 5/10 (50.00%) rows.
+Removed 5/10 (50.00%) rows. New shape: (5, 8).
 >>> _ = df.raffa.startlog().drop(["bill_length_mm", "bill_depth_mm"], axis=1).raffa.endlog(timeit=False)
-Removed 2/8 (25.00%) columns.
+Removed 2/8 (25.00%) columns. New shape: (10, 6).
 
 With the default ``timeit=True``, ``endlog`` appends the elapsed time on a
 second line (the duration varies from run to run):
 
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
-Removed 2/10 (20.00%) rows.
+Removed 2/10 (20.00%) rows. New shape: (8, 8).
 Took: ...
 
 Operations that change values but not the shape need ``clone=True`` so the
@@ -110,7 +111,7 @@ The same accessor is available on a Series:
 
 >>> s = df["bill_length_mm"]
 >>> _ = s.raffa.startlog().dropna().raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) values.
+Removed 2/10 (20.00%) values. New shape: (8,).
 >>> _ = s.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
 Changed 2/10 (20.00%) values.
 
@@ -264,17 +265,17 @@ Removing rows with nulls, filtering values, or selecting columns changes the
 shape, which is logged:
 
 >>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) rows.
+Removed 2/10 (20.00%) rows. New shape: (8, 8).
 >>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog(timeit=False)
-Removed 5/10 (50.00%) rows.
+Removed 5/10 (50.00%) rows. New shape: (5, 8).
 >>> _ = df.raffa.startlog().select(pl.exclude(["bill_length_mm", "bill_depth_mm"])).raffa.endlog(timeit=False)
-Removed 2/8 (25.00%) columns.
+Removed 2/8 (25.00%) columns. New shape: (10, 6).
 
 As with pandas, the default ``timeit=True`` appends the elapsed time on a second
 line (the duration varies from run to run):
 
 >>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog()
-Removed 5/10 (50.00%) rows.
+Removed 5/10 (50.00%) rows. New shape: (5, 8).
 Took: ...
 
 Operations that change values but not the shape need ``clone=True``:

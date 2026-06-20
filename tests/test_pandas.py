@@ -47,7 +47,10 @@ def test_endlog_logs_removed_rows(caplog):
         df.raffa.startlog()
         df = df[df["a"] > 1]
         df.raffa.endlog()
-    assert any("Removed 1/4 (25.00%) rows." in r.message for r in caplog.records)
+    assert any(
+        "Removed 1/4 (25.00%) rows. New shape: (3, 1)." in r.message
+        for r in caplog.records
+    )
 
 
 def test_endlog_logs_value_changes(caplog):
@@ -73,7 +76,10 @@ def test_series_endlog_removed_values(caplog):
         s.raffa.startlog()
         s = s[s > 2]
         s.raffa.endlog()
-    assert any("Removed 2/5 (40.00%) values." in r.message for r in caplog.records)
+    assert any(
+        "Removed 2/5 (40.00%) values. New shape: (3,)." in r.message
+        for r in caplog.records
+    )
 
 
 def test_join_inner_drops_source_columns(caplog):
@@ -128,7 +134,9 @@ def test_endlog_add_rows_to_empty_frame_is_guarded(caplog):
         df.raffa.startlog()
         df = df.reindex(range(3))
         df.raffa.endlog(timeit=False)
-    assert any("Added 3/0 (N/A) rows." in r.message for r in caplog.records)
+    assert any(
+        "Added 3/0 (N/A) rows. New shape: (3, 1)." in r.message for r in caplog.records
+    )
 
 
 def test_join_empty_output_does_not_divide_by_zero(caplog):

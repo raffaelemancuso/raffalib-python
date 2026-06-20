@@ -47,7 +47,7 @@ A taste
        }
    )
    df = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
-   # -> Removed 2/6 (33.33%) rows.
+   # -> Removed 2/6 (33.33%) rows. New shape: (4, 3).
    # -> Took: 0.01 seconds
 
 New here? Start with :doc:`quickstart`, then browse the :doc:`examples` for the

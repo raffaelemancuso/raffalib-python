@@ -46,9 +46,9 @@ to log how the data changed:
 ...         "body_mass_g": [3750.0, 3800.0, np.nan, 4500.0, 5700.0, 3500.0],
 ...     }
 ... )
->>> # Row/column count changes are logged automatically
+>>> # Row/column count changes are logged automatically, with the resulting shape
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/6 (33.33%) rows.
+Removed 2/6 (33.33%) rows. New shape: (4, 3).
 >>> # Pass clone=True to also detect value-level changes when the shape is unchanged
 >>> _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
 Changed 3/18 (16.67%) values.
@@ -65,7 +65,7 @@ The polars accessor works identically:
 ...     }
 ... )
 >>> _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
-Removed 3/6 (50.00%) rows.
+Removed 3/6 (50.00%) rows. New shape: (3, 3).
 
 Timing each step
 ----------------
@@ -75,7 +75,7 @@ the default ``timeit=True``, ``endlog`` appends the wall-clock time the step too
 on a second line (the duration varies from run to run):
 
 >>> _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog()
-Removed 3/6 (50.00%) rows.
+Removed 3/6 (50.00%) rows. New shape: (3, 3).
 Took: ...
 
 Next steps

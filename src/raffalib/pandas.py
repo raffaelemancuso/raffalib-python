@@ -94,8 +94,7 @@ class RaffaSeries:
         initial_shape = self._series._initial_shape
         final_shape = self._series.shape
         if final_shape != initial_shape:
-            dr = initial_shape[0] - final_shape[0]
-            msg += _logutils.count_delta(dr, initial_shape[0], "values")
+            msg += _logutils.series_shape_delta(initial_shape, final_shape)
         else:
             if self._series._initial_series is not None:
                 nchanged = self._series != self._series._initial_series
@@ -311,9 +310,9 @@ class RaffaDataFrame:
         n_both = joined_both.shape[0]
         n_left_dups = int(joined_both[left_col].duplicated(keep=False).sum())
         n_right_dups = int(joined_both[right_col].duplicated(keep=False).sum())
-        n_left_only = joined[
-            joined[left_col].notna() & joined[right_col].isna()
-        ].shape[0]
+        n_left_only = joined[joined[left_col].notna() & joined[right_col].isna()].shape[
+            0
+        ]
         n_right_only = joined[
             joined[left_col].isna() & joined[right_col].notna()
         ].shape[0]
