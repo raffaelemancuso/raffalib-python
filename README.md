@@ -62,21 +62,28 @@ uv add --editable "/path/to/raffalib-python[pandas,polars]"
 ### Logging changes in a pandas pipeline
 
 ```python
+import numpy as np
 import pandas as pd
 import raffalib
 import raffalib.pandas  # registers the `.raffa` accessor
 
 logger = raffalib.create_logger(rich=False, fmt="{message}")
 
-df = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
+df = pd.DataFrame(
+    {
+        "species": ["Adelie", "Adelie", "Adelie", "Gentoo", "Gentoo", "Chinstrap"],
+        "bill_depth_mm": [18.7, np.nan, 18.0, np.nan, 16.3, 17.9],
+        "body_mass_g": [3750.0, 3800.0, np.nan, 4500.0, 5700.0, 3500.0],
+    }
+)
 
 # Shape changes are logged automatically
 _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-# -> Removed 2/344 (0.58%) rows.
+# -> Removed 2/6 (33.33%) rows.
 
 # Pass clone=True to also detect value-level changes when the shape is unchanged
 _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
-# -> Changed 19/2,752 (0.69%) values.
+# -> Changed 3/18 (16.67%) values.
 ```
 
 ### The same with polars
@@ -88,10 +95,16 @@ import raffalib.polars  # registers the `.raffa` namespace
 
 logger = raffalib.create_logger(rich=False, fmt="{message}")
 
-df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
+df = pl.DataFrame(
+    {
+        "species": ["Adelie", "Adelie", "Adelie", "Gentoo", "Gentoo", "Chinstrap"],
+        "bill_depth_mm": [18.7, None, 18.0, None, 16.3, 17.9],
+        "body_mass_g": [3750.0, 3800.0, None, 4500.0, 5700.0, 3500.0],
+    }
+)
 
 _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
-# -> Removed 192/344 (55.81%) rows.
+# -> Removed 3/6 (50.00%) rows.
 ```
 
 Both backends share the same `startlog(clone=False)` / `endlog(custom_msg=None, timeit=True)`
@@ -103,6 +116,9 @@ Both accessors expose the same `join()` wrapper — over `pd.DataFrame.merge` fo
 pandas and `pl.DataFrame.join` for polars — with identical logging output:
 
 ```python
+df1 = pd.DataFrame({"A": ["a1", "a2", "a3", "a4"], "B": ["b1", "b2", "b3", "b4"]})
+df2 = pd.DataFrame({"A": ["a1", "a2", "a3", "a5", "a6"], "C": ["c1", "c2", "c3", "c5", "c6"]})
+
 out = df1.raffa.join(df2, on="A", how="left")
 # Total rows in output table: 4
 # From left only: 1/4 (25.00%)
