@@ -29,13 +29,8 @@ polars = [
 	"polars-permute>=0.1.6",
 ]
 bibliometrics = [
-    "beautifulsoup4>=4.14.3",
     "fake-useragent>=2.2.0",
     "pyalex>=0.21",
-]
-crypto = [
-    "keepassxc-proxy-client>=0.1.7",
-	"python-gnupg>=0.5.6",
 ]
 db = [
     "sqlalchemy>=2.0.48",

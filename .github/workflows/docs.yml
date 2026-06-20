@@ -1,0 +1,21 @@
+name: docs
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  doctest:
+    name: Documentation doctests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Run documentation doctests
+        run: >-
+          uv run --extra docs --extra pandas --extra polars
+          sphinx-build -b doctest docs/source docs/_build/doctest

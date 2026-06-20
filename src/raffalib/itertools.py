@@ -28,6 +28,7 @@ def batch_boundaries(total, n_per_batch):
 
     :Example:
 
+    >>> from raffalib.itertools import batch_boundaries
     >>> list(batch_boundaries(20, 3))
     [(0, 1, 3), (1, 4, 6), (2, 7, 9), (3, 10, 12), (4, 13, 15), (5, 16, 18), (6, 19, 20)]
     """

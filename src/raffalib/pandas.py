@@ -90,11 +90,7 @@ class RaffaSeries:
         :return: The pandas Series for piping.
         :rtype: pd.Series
         """
-        if custom_msg is None:
-            custom_msg = ""
-        else:
-            custom_msg += ". "
-        msg = f"{custom_msg}"
+        msg = _logutils.prefix(custom_msg)
         initial_shape = self._series._initial_shape
         final_shape = self._series.shape
         if final_shape != initial_shape:
@@ -204,11 +200,7 @@ class RaffaDataFrame:
         :return: The DataFrame for piping.
         :rtype: pd.DataFrame
         """
-        if custom_msg is None:
-            custom_msg = ""
-        else:
-            custom_msg += ". "
-        msg = f"{custom_msg}"
+        msg = _logutils.prefix(custom_msg)
         final_shape = self._df.shape
         initial_shape = self._df._initial_shape
         if final_shape != initial_shape:
@@ -306,11 +298,7 @@ class RaffaDataFrame:
             n_initial = df1.shape[0]
             n_rows_joined = joined.shape[0]
             n_var = n_rows_joined - n_initial
-            logger.info(
-                f"Detected filtering join. "
-                f"Rows variation {_logutils.ratio(n_var, n_initial)}, "
-                f"total rows after join: {_logutils.ratio(n_rows_joined, n_initial)}"
-            )
+            logger.info(_logutils.filtering_join_log(n_var, n_rows_joined, n_initial))
             return joined.drop(columns=[left_col])
         # pandas uses "outer" where polars uses "full"
         if how == "full":
@@ -334,14 +322,22 @@ class RaffaDataFrame:
         right_dropped = set(df2[right_col]) - set(joined[right_col].dropna())
         n_right_dropped = len(right_dropped)
         # Log rows information
-        msg = f"Total rows in output table: {n_rows_joined:,d}\n"
-        msg += f"From left only: {_logutils.ratio(n_left_only, n_rows_joined)}\n"
-        msg += f"From right only: {_logutils.ratio(n_right_only, n_rows_joined)}\n"
-        msg += f"From both: {_logutils.ratio(n_both, n_rows_joined)} (left dups {n_left_dups}, right dups {n_right_dups})\n"
-        msg += f"Dropped rows from left: {_logutils.ratio(n_left_dropped, df1.shape[0])}\n"
-        msg += f"Dropped rows from right: {_logutils.ratio(n_right_dropped, df2.shape[0])}\n"
-        # Log
-        logger.info(msg)
+        logger.info(
+            _logutils.join_log(
+                _logutils.JoinCounts(
+                    n_rows_joined=n_rows_joined,
+                    n_left_only=n_left_only,
+                    n_right_only=n_right_only,
+                    n_both=n_both,
+                    n_left_dups=n_left_dups,
+                    n_right_dups=n_right_dups,
+                    n_left_dropped=n_left_dropped,
+                    n_left_total=df1.shape[0],
+                    n_right_dropped=n_right_dropped,
+                    n_right_total=df2.shape[0],
+                )
+            )
+        )
         # Drop or relocate row indices
         if not keep_row_index:
             joined = joined.drop(columns=[left_col, right_col])

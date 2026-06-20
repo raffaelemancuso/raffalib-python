@@ -36,31 +36,47 @@ Importing :mod:`raffalib.pandas` (or :mod:`raffalib.polars`) registers a
 ``.raffa`` accessor. Wrap any pipeline between ``startlog()`` and ``endlog()``
 to log how the data changed:
 
-.. code-block:: python
-
-   import pandas as pd
-   import raffalib.pandas  # registers the `.raffa` accessor
-
-   df = pd.read_csv("penguins.csv")
-
-   # Row/column count changes are logged automatically
-   df = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-   # -> Removed 2/344 (0.58%) rows.
-
-   # Pass clone=True to also detect value-level changes when the shape is unchanged
-   df = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
-   # -> Changed 19/2,752 (0.69%) values.
+>>> import pandas as pd
+>>> import numpy as np
+>>> import raffalib.pandas  # registers the `.raffa` accessor
+>>> df = pd.DataFrame(
+...     {
+...         "species": ["Adelie", "Adelie", "Adelie", "Gentoo", "Gentoo", "Chinstrap"],
+...         "bill_depth_mm": [18.7, np.nan, 18.0, np.nan, 16.3, 17.9],
+...         "body_mass_g": [3750.0, 3800.0, np.nan, 4500.0, 5700.0, 3500.0],
+...     }
+... )
+>>> # Row/column count changes are logged automatically
+>>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
+Removed 2/6 (33.33%) rows.
+>>> # Pass clone=True to also detect value-level changes when the shape is unchanged
+>>> _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
+Changed 3/18 (16.67%) values.
 
 The polars accessor works identically:
 
-.. code-block:: python
+>>> import polars as pl
+>>> import raffalib.polars  # registers the `.raffa` namespace
+>>> df = pl.DataFrame(
+...     {
+...         "species": ["Adelie", "Adelie", "Adelie", "Gentoo", "Gentoo", "Chinstrap"],
+...         "bill_depth_mm": [18.7, None, 18.0, None, 16.3, 17.9],
+...         "body_mass_g": [3750.0, 3800.0, None, 4500.0, 5700.0, 3500.0],
+...     }
+... )
+>>> _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
+Removed 3/6 (50.00%) rows.
 
-   import polars as pl
-   import raffalib.polars  # registers the `.raffa` namespace
+Timing each step
+----------------
 
-   df = pl.read_csv("penguins.csv")
-   df = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
-   # -> Removed 192/344 (55.81%) rows.
+The examples above pass ``timeit=False`` so their output is reproducible. With
+the default ``timeit=True``, ``endlog`` appends the wall-clock time the step took
+on a second line (the duration varies from run to run):
+
+>>> _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog()
+Removed 3/6 (50.00%) rows.
+Took: ...
 
 Next steps
 ----------
@@ -68,3 +84,9 @@ Next steps
 - :doc:`examples` — logging concepts, ``freq`` / ``crosstab``, logging joins,
   and Word export for both backends.
 - **API Reference** (sidebar) — the full, docstring-generated reference.
+
+.. note::
+
+   Every ``>>>`` snippet on this page and in :doc:`examples` is an executable
+   doctest, run with ``uv run sphinx-build -b doctest source _build/doctest``
+   (or ``make doctest``).

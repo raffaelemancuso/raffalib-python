@@ -32,7 +32,7 @@ def tqdm_batch(items, batch_size):
 
     :Example:
 
-    >>> for batch in tqdm_batch(my_list, 100)():
+    >>> for batch in tqdm_batch(my_list, 100)():  # doctest: +SKIP
     ...     process(batch)
     """
     n_batches = -(-len(items) // batch_size)  # ceil division

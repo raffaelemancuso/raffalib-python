@@ -78,3 +78,62 @@ def test_elapsed_prefix_and_type():
     msg = _logutils.elapsed(time.perf_counter_ns())
     assert isinstance(msg, str)
     assert msg.startswith("\nTook: ")
+
+
+def test_prefix_none_is_empty():
+    assert _logutils.prefix(None) == ""
+
+
+def test_prefix_appends_separator():
+    assert _logutils.prefix("step 1") == "step 1. "
+
+
+def test_filtering_join_log():
+    assert _logutils.filtering_join_log(-1, 3, 4) == (
+        "Detected filtering join. Rows variation -1/4 (-25.00%), "
+        "total rows after join: 3/4 (75.00%)"
+    )
+
+
+def test_join_log_matches_expected_layout():
+    msg = _logutils.join_log(
+        _logutils.JoinCounts(
+            n_rows_joined=4,
+            n_left_only=1,
+            n_right_only=0,
+            n_both=3,
+            n_left_dups=0,
+            n_right_dups=0,
+            n_left_dropped=0,
+            n_left_total=4,
+            n_right_dropped=2,
+            n_right_total=5,
+        )
+    )
+    assert msg == (
+        "Total rows in output table: 4\n"
+        "From left only: 1/4 (25.00%)\n"
+        "From right only: 0/4 (0.00%)\n"
+        "From both: 3/4 (75.00%) (left dups 0, right dups 0)\n"
+        "Dropped rows from left: 0/4 (0.00%)\n"
+        "Dropped rows from right: 2/5 (40.00%)\n"
+    )
+
+
+def test_join_log_guards_zero_denominators():
+    msg = _logutils.join_log(
+        _logutils.JoinCounts(
+            n_rows_joined=0,
+            n_left_only=0,
+            n_right_only=0,
+            n_both=0,
+            n_left_dups=0,
+            n_right_dups=0,
+            n_left_dropped=2,
+            n_left_total=2,
+            n_right_dropped=2,
+            n_right_total=2,
+        )
+    )
+    assert "Total rows in output table: 0" in msg
+    assert "From both: 0/0 (N/A)" in msg

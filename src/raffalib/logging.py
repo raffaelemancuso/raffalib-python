@@ -45,47 +45,48 @@ def create_logger(
     datefmt = "%Y-%m-%d %H:%M:%S"
     logging.captureWarnings(True)
 
+    # Default format depends on the handler: a plain StreamHandler prints the
+    # full context, whereas RichHandler already renders the timestamp and level
+    # itself, so its formatter only needs to add the name and message.
+    if fmt is None:
+        fmt = (
+            "{name} - {message}"
+            if rich
+            else "{asctime} - {levelname} - {name} - {message}"
+        )
+
+    if rich:
+        handler_name = "rich"
+        handler = {
+            "level": level,
+            "formatter": "configured",
+            "class": "rich.logging.RichHandler",
+            "rich_tracebacks": False,
+        }
+    else:
+        handler_name = "console"
+        handler = {
+            "level": level,
+            "formatter": "configured",
+            "class": "logging.StreamHandler",
+        }
+
     LOGGING = {
         "version": 1,
         "disable_existing_loggers": disable_existing_loggers,
         "formatters": {
-            "standard": {
-                "format": "{asctime} - {levelname} - {name} - {message}",
-                "style": "{",
-                "datefmt": datefmt,
-            },
-            "rich": {
-                # rich already prints timestamp
-                "format": "{name} - {message}",
+            "configured": {
+                "format": fmt,
                 "style": "{",
                 "datefmt": datefmt,
             },
         },
         "handlers": {
-            "console": {
-                "level": level,
-                "formatter": "standard",
-                "class": "logging.StreamHandler",
-            },
-            # "rotate_file": {
-            #    "level": level,
-            #    "formatter": "standard",
-            #    "class": "logging.handlers.RotatingFileHandler",
-            #    "filename": "rotated.log",
-            #    "encoding": "utf8",
-            #    "maxBytes": 100000,
-            #    "backupCount": 1,
-            # },
-            "rich": {
-                "level": level,
-                "formatter": "rich",
-                "class": "rich.logging.RichHandler",
-                "rich_tracebacks": False,
-            },
+            handler_name: handler,
         },
         "loggers": {
             logger_name: {
-                "handlers": ["rich"],
+                "handlers": [handler_name],
                 "level": level,
             },
         },

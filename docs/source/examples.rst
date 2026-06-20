@@ -5,6 +5,10 @@ Examples
 This guide walks through the main features of **raffalib-python**. For a faster
 introduction see :doc:`quickstart`.
 
+The code snippets on this page are executable :mod:`doctest` examples, verified
+with ``sphinx-build -b doctest`` (see :ref:`running-the-doctests`). They build
+small inline DataFrames, so they run without any network access or data files.
+
 ****************
 Logging concepts
 ****************
@@ -31,10 +35,18 @@ added/removed or, when the shape is unchanged, how many cell values changed.
    A convenience alias for ``endlog().startlog()`` — log the current step and
    immediately start the next one.
 
-Messages are emitted through the standard :mod:`logging` module; configure it
-once with :func:`raffalib.create_logger` (see :ref:`utilities`). The examples
-below pass ``timeit=False`` so the output is deterministic; in real use you will
-usually keep the default ``timeit=True``.
+Messages are emitted through the standard :mod:`logging` module. Configure it
+once with :func:`raffalib.create_logger` so the messages reach your console:
+
+.. code-block:: python
+
+   import raffalib
+
+   raffalib.create_logger(rich=False, fmt="{message}")
+
+The doctests below assume such a message-only logger. Most of them pass
+``timeit=False`` so the output is deterministic; in real use you will usually
+keep the default ``timeit=True``, which appends a ``Took: …`` line.
 
 ******
 pandas
@@ -43,12 +55,24 @@ pandas
 Logging
 =======
 
+Build a small DataFrame to work with:
+
 >>> import pandas as pd
->>> import raffalib
->>> import raffalib.pandas
->>> logger = raffalib.create_logger(rich=False, fmt="{message}")
->>>
->>> df = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
+>>> import numpy as np
+>>> import raffalib.pandas  # registers the `.raffa` accessor
+>>> df = pd.DataFrame(
+...     {
+...         "species": ["Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+...                     "Gentoo", "Gentoo", "Gentoo", "Chinstrap", "Chinstrap"],
+...         "island": ["Torgersen"] * 5 + ["Biscoe"] * 3 + ["Dream"] * 2,
+...         "bill_length_mm": [39.1, 39.5, 40.3, np.nan, 36.7, 46.1, 50.0, np.nan, 46.5, 50.0],
+...         "bill_depth_mm": [18.7, 17.4, 18.0, np.nan, 19.3, 13.2, 16.3, np.nan, 17.9, 19.5],
+...         "flipper_length_mm": [181.0, 186.0, 195.0, np.nan, 193.0, 211.0, 230.0, 210.0, 192.0, 196.0],
+...         "body_mass_g": [3750.0, 3800.0, 3250.0, np.nan, 3450.0, 4500.0, 5700.0, 4800.0, 3500.0, 3900.0],
+...         "sex": ["male", "female", "female", None, "female", "female", "male", None, "female", "male"],
+...         "year": [2007, 2007, 2007, 2007, 2007, 2007, 2007, 2008, 2007, 2008],
+...     }
+... )
 >>> df.head()
   species     island  bill_length_mm  bill_depth_mm  flipper_length_mm  body_mass_g     sex  year
 0  Adelie  Torgersen            39.1           18.7              181.0       3750.0    male  2007
@@ -61,11 +85,18 @@ Removing rows, filtering, or dropping columns changes the shape, which is
 logged automatically:
 
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/344 (0.58%) rows.
+Removed 2/10 (20.00%) rows.
 >>> _ = df.raffa.startlog().query("species=='Adelie'").raffa.endlog(timeit=False)
-Removed 192/344 (55.81%) rows.
+Removed 5/10 (50.00%) rows.
 >>> _ = df.raffa.startlog().drop(["bill_length_mm", "bill_depth_mm"], axis=1).raffa.endlog(timeit=False)
 Removed 2/8 (25.00%) columns.
+
+With the default ``timeit=True``, ``endlog`` appends the elapsed time on a
+second line (the duration varies from run to run):
+
+>>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
+Removed 2/10 (20.00%) rows.
+Took: ...
 
 Operations that change values but not the shape need ``clone=True`` so the
 initial data can be compared against:
@@ -73,33 +104,39 @@ initial data can be compared against:
 >>> _ = df.raffa.startlog().fillna(0).raffa.endlog(timeit=False)
 Shape is the same. No value-level comparison done because clone=False was used in startlog().
 >>> _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
-Changed 19/2,752 (0.69%) values.
+Changed 8/80 (10.00%) values.
 
 The same accessor is available on a Series:
 
 >>> s = df["bill_length_mm"]
 >>> _ = s.raffa.startlog().dropna().raffa.endlog(timeit=False)
-Removed 2/344 (0.58%) values.
+Removed 2/10 (20.00%) values.
 >>> _ = s.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
-Changed 2/344 (0.58%) values.
+Changed 2/10 (20.00%) values.
 
 Frequency tables
 ================
 
 ``freq`` builds a frequency table with counts, proportions, and a ``Total`` row:
 
->>> s = pd.Series(["a", "a", "b", "c", "a"], name="letter")
+>>> s = pd.Series(["a", "a", "a", "b", "b", "c"], name="letter")
 >>> s.raffa.freq()
         count  proportion
 letter
-a           3         0.6
-b           1         0.2
-c           1         0.2
-Total       5         1.0
+a           3    0.500000
+b           2    0.333333
+c           1    0.166667
+Total       6    1.000000
 
 On a DataFrame, pass the column name (it delegates to the Series accessor):
 
 >>> df.raffa.freq("species")
+           count  proportion
+species
+Adelie         5         0.5
+Gentoo         3         0.3
+Chinstrap      2         0.2
+Total         10         1.0
 
 Joins
 =====
@@ -172,13 +209,17 @@ Word export
 
 Export a DataFrame to a Word ``.docx`` table:
 
->>> df.head(5).raffa.to_docx("table.docx")
+.. code-block:: python
+
+   df.head(5).raffa.to_docx("table.docx")
 
 Keyword arguments are forwarded to :class:`~raffalib.export_docx.DocxFile` —
 document and heading options (e.g. ``heading_text``, ``landscape``) — or to its
 ``add_table`` method — table options (e.g. ``table_style``, ``table_font_size``):
 
->>> df.head(5).raffa.to_docx("table.docx", heading_text="Table 1", table_style="Light Grid")
+.. code-block:: python
+
+   df.head(5).raffa.to_docx("table.docx", heading_text="Table 1", table_style="Light Grid")
 
 ******
 polars
@@ -187,50 +228,77 @@ polars
 Logging
 =======
 
-Let's import the libraries and create a logger:
+Import the libraries and build a DataFrame with a few missing values:
 
 >>> import polars as pl
 >>> import polars.selectors as cs
->>> import raffalib
->>> import raffalib.polars
->>> logger = raffalib.create_logger(rich=False, fmt="{message}")
-
-Let's load a dataset. ``replace_string_with_null`` turns the literal ``"NA"``
-strings used by this CSV into proper nulls:
-
->>> df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
->>> df = df.raffa.replace_string_with_null("NA")
->>> df = df.with_columns(pl.col(["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"]).cast(pl.Float32).name.keep())
+>>> import raffalib.polars  # registers the `.raffa` namespace
+>>> df = pl.DataFrame(
+...     {
+...         "species": ["Adelie", "Adelie", "Adelie", "Adelie", "Adelie",
+...                     "Gentoo", "Gentoo", "Gentoo", "Chinstrap", "Chinstrap"],
+...         "island": ["Torgersen"] * 5 + ["Biscoe"] * 3 + ["Dream"] * 2,
+...         "bill_length_mm": [39.1, 39.5, 40.3, None, 36.7, 46.1, 50.0, None, 46.5, 50.0],
+...         "bill_depth_mm": [18.7, 17.4, 18.0, None, 19.3, 13.2, 16.3, None, 17.9, 19.5],
+...         "flipper_length_mm": [181.0, 186.0, 195.0, None, 193.0, 211.0, 230.0, 210.0, 192.0, 196.0],
+...         "body_mass_g": [3750.0, 3800.0, 3250.0, None, 3450.0, 4500.0, 5700.0, 4800.0, 3500.0, 3900.0],
+...         "sex": ["male", "female", "female", None, "female", "female", "male", None, "female", "male"],
+...         "year": [2007, 2007, 2007, 2007, 2007, 2007, 2007, 2008, 2007, 2008],
+...     }
+... )
 >>> df.head()
 shape: (5, 8)
 ┌─────────┬───────────┬────────────────┬───────────────┬───────────────────┬─────────────┬────────┬───────┐
 │ species ┆ island    ┆ bill_length_mm ┆ bill_depth_mm ┆ flipper_length_mm ┆ body_mass_g ┆ sex    ┆ year  │
 │ ---     ┆ ---       ┆ ---            ┆ ---           ┆ ---               ┆ ---         ┆ ---    ┆ ---   │
-│ str     ┆ str       ┆ f32            ┆ f32           ┆ f32               ┆ f32         ┆ str    ┆ i64   │
+│ str     ┆ str       ┆ f64            ┆ f64           ┆ f64               ┆ f64         ┆ str    ┆ i64   │
 ╞═════════╪═══════════╪════════════════╪═══════════════╪═══════════════════╪═════════════╪════════╪═══════╡
-│ Adelie  ┆ Torgersen ┆ 39.099998      ┆ 18.700001     ┆ 181.0             ┆ 3,750.0     ┆ male   ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 39.1           ┆ 18.7          ┆ 181.0             ┆ 3,750.0     ┆ male   ┆ 2,007 │
 │ Adelie  ┆ Torgersen ┆ 39.5           ┆ 17.4          ┆ 186.0             ┆ 3,800.0     ┆ female ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ 40.299999      ┆ 18.0          ┆ 195.0             ┆ 3,250.0     ┆ female ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 40.3           ┆ 18.0          ┆ 195.0             ┆ 3,250.0     ┆ female ┆ 2,007 │
 │ Adelie  ┆ Torgersen ┆ null           ┆ null          ┆ null              ┆ null        ┆ null   ┆ 2,007 │
-│ Adelie  ┆ Torgersen ┆ 36.700001      ┆ 19.299999     ┆ 193.0             ┆ 3,450.0     ┆ female ┆ 2,007 │
+│ Adelie  ┆ Torgersen ┆ 36.7           ┆ 19.3          ┆ 193.0             ┆ 3,450.0     ┆ female ┆ 2,007 │
 └─────────┴───────────┴────────────────┴───────────────┴───────────────────┴─────────────┴────────┴───────┘
 
 Removing rows with nulls, filtering values, or selecting columns changes the
 shape, which is logged:
 
 >>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/344 (0.58%) rows.
+Removed 2/10 (20.00%) rows.
 >>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog(timeit=False)
-Removed 192/344 (55.81%) rows.
+Removed 5/10 (50.00%) rows.
 >>> _ = df.raffa.startlog().select(pl.exclude(["bill_length_mm", "bill_depth_mm"])).raffa.endlog(timeit=False)
 Removed 2/8 (25.00%) columns.
+
+As with pandas, the default ``timeit=True`` appends the elapsed time on a second
+line (the duration varies from run to run):
+
+>>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog()
+Removed 5/10 (50.00%) rows.
+Took: ...
 
 Operations that change values but not the shape need ``clone=True``:
 
 >>> _ = df.raffa.startlog().fill_null(0).raffa.endlog(timeit=False)
 Shape is the same. No value-level comparison done because clone=False was used in startlog().
 >>> _ = df.raffa.startlog(clone=True).fill_null("0").raffa.endlog(timeit=False)
-Changed 11/2,752 (0.40%) values.
+Changed 2/80 (2.50%) values.
+
+``replace_string_with_null`` turns a sentinel string (such as the literal
+``"NA"`` used by some CSV files) into proper nulls across all string columns:
+
+>>> raw = pl.DataFrame({"species": ["Adelie", "NA", "Gentoo"], "sex": ["male", "female", "NA"]})
+>>> raw.raffa.replace_string_with_null("NA")
+shape: (3, 2)
+┌─────────┬────────┐
+│ species ┆ sex    │
+│ ---     ┆ ---    │
+│ str     ┆ str    │
+╞═════════╪════════╡
+│ Adelie  ┆ male   │
+│ null    ┆ female │
+│ Gentoo  ┆ null   │
+└─────────┴────────┘
 
 Frequency and cross tables
 ==========================
@@ -238,24 +306,35 @@ Frequency and cross tables
 ``freq`` builds a frequency table for a column, with counts, percentages, and a
 ``Total`` row:
 
->>> sp = pl.Series("letter", ["a", "a", "b", "c", "a"])
+>>> sp = pl.Series("letter", ["a", "a", "a", "b", "b", "c"])
 >>> sp.raffa.freq()
 shape: (4, 3)
-┌───────┬───────┬───────┐
-│ value ┆ count ┆ perc  │
-│ ---   ┆ ---   ┆ ---   │
-│ str   ┆ u32   ┆ f64   │
-╞═══════╪═══════╪═══════╡
-│ a     ┆ 3     ┆ 60.0  │
-│ b     ┆ 1     ┆ 20.0  │
-│ c     ┆ 1     ┆ 20.0  │
-│ Total ┆ 5     ┆ 100.0 │
-└───────┴───────┴───────┘
+┌───────┬───────┬───────────┐
+│ value ┆ count ┆ perc      │
+│ ---   ┆ ---   ┆ ---       │
+│ str   ┆ u32   ┆ f64       │
+╞═══════╪═══════╪═══════════╡
+│ a     ┆ 3     ┆ 50.0      │
+│ b     ┆ 2     ┆ 33.333333 │
+│ c     ┆ 1     ┆ 16.666667 │
+│ Total ┆ 6     ┆ 100.0     │
+└───────┴───────┴───────────┘
 
 On a DataFrame, pass the column name (equivalent to
 ``df.get_column("species").raffa.freq()``):
 
 >>> df.raffa.freq("species")
+shape: (4, 3)
+┌───────────┬───────┬───────┐
+│ value     ┆ count ┆ perc  │
+│ ---       ┆ ---   ┆ ---   │
+│ str       ┆ u32   ┆ f64   │
+╞═══════════╪═══════╪═══════╡
+│ Adelie    ┆ 5     ┆ 50.0  │
+│ Gentoo    ┆ 3     ┆ 30.0  │
+│ Chinstrap ┆ 2     ┆ 20.0  │
+│ Total     ┆ 10    ┆ 100.0 │
+└───────────┴───────┴───────┘
 
 ``crosstab`` builds a contingency table of two columns:
 
@@ -353,13 +432,17 @@ Word export
 
 Export a DataFrame to a Word ``.docx`` file:
 
->>> df = pl.DataFrame({"a": [1, 2, 3], "b": ["AAA", "BBB", "CCC"]})
->>> df.raffa.to_docx("main.docx")
+.. code-block:: python
+
+   out = pl.DataFrame({"a": [1, 2, 3], "b": ["AAA", "BBB", "CCC"]})
+   out.raffa.to_docx("main.docx")
 
 As with pandas, document/heading and table options can be passed as keyword
 arguments and are routed to the right place:
 
->>> df.raffa.to_docx("main.docx", heading_text="Table 1", landscape=True)
+.. code-block:: python
+
+   out.raffa.to_docx("main.docx", heading_text="Table 1", landscape=True)
 
 .. _utilities:
 
@@ -376,8 +459,11 @@ Logger setup
 :func:`raffalib.create_logger` configures the standard-library logger used by
 the change-logging accessors:
 
->>> import raffalib
->>> logger = raffalib.create_logger(rich=False, fmt="{message}")
+.. code-block:: python
+
+   import raffalib
+
+   logger = raffalib.create_logger(rich=False, fmt="{message}")
 
 Pass ``rich=True`` for colourised console output via
 `rich <https://rich.readthedocs.io/>`_, or omit ``fmt`` for the default
@@ -389,9 +475,12 @@ Batched iteration
 :func:`raffalib.tqdm_batch` wraps a sized iterable in a
 `tqdm <https://tqdm.github.io/>`_ progress bar that advances once per batch:
 
->>> from raffalib import tqdm_batch
->>> for batch in tqdm_batch(items, batch_size=100)():
-...     process(batch)
+.. code-block:: python
+
+   from raffalib import tqdm_batch
+
+   for batch in tqdm_batch(items, batch_size=100)():
+       process(batch)
 
 :func:`raffalib.itertools.batch_boundaries` is the index-only equivalent,
 yielding ``(batch_index, start, end)`` tuples (1-based, inclusive):
@@ -420,7 +509,24 @@ serialise arbitrary Python objects with
 `jsonpickle <https://jsonpickle.github.io/>`_, writing to a timestamped file
 named ``{stem}_{YYYY-MM-DD-HH-MM-SS}``:
 
->>> from pathlib import Path
->>> from raffalib.mypickle import write_pickle, read_pickle
->>> write_pickle({"a": 1}, Path("."), "mydata")
->>> obj = read_pickle(Path("mydata_2026-06-20-09-30-00"))
+.. code-block:: python
+
+   from pathlib import Path
+   from raffalib.mypickle import write_pickle, read_pickle
+
+   write_pickle({"a": 1}, Path("."), "mydata")
+   obj = read_pickle(Path("mydata_2026-06-20-09-30-00"))
+
+.. _running-the-doctests:
+
+Running the doctests
+====================
+
+Every ``>>>`` example on this page is executed by Sphinx's doctest builder. From
+the ``docs`` directory:
+
+.. code-block:: console
+
+   uv run sphinx-build -b doctest source _build/doctest
+
+or, equivalently, ``make doctest`` (``.\make.bat doctest`` on Windows).

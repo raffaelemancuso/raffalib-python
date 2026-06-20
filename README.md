@@ -47,7 +47,6 @@ only pull in what you use:
 | `pandas`         | `raffalib.pandas` accessors                          |
 | `polars`         | `raffalib.polars` accessors and join logging         |
 | `bibliometrics`  | OpenAlex / Scopus helpers                            |
-| `crypto`         | KeePassXC / GnuPG helpers                            |
 | `db`             | SQLAlchemy view helpers                              |
 | `web`            | Selenium helpers                                     |
 | `docs`           | Build the Sphinx documentation                       |
@@ -69,7 +68,7 @@ import raffalib.pandas  # registers the `.raffa` accessor
 
 logger = raffalib.create_logger(rich=False, fmt="{message}")
 
-df = pd.read_csv("penguins.csv")
+df = pd.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
 
 # Shape changes are logged automatically
 _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
@@ -89,7 +88,7 @@ import raffalib.polars  # registers the `.raffa` namespace
 
 logger = raffalib.create_logger(rich=False, fmt="{message}")
 
-df = pl.read_csv("penguins.csv")
+df = pl.read_csv("https://raw.githubusercontent.com/allisonhorst/palmerpenguins/refs/heads/main/inst/extdata/penguins.csv")
 
 _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
 # -> Removed 192/344 (55.81%) rows.
@@ -151,6 +150,15 @@ uv sync --extra dev
 uv run pytest        # run the test suite
 uv run ruff check    # lint
 uv run ruff format   # format
+```
+
+The examples in the documentation (`docs/source/quickstart.rst` and
+`examples.rst`) are executable doctests. They run in CI and can be checked
+locally with:
+
+```console
+uv run --extra docs --extra pandas --extra polars \
+  sphinx-build -b doctest docs/source docs/_build/doctest
 ```
 
 ## License

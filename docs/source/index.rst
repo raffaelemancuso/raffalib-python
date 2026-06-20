@@ -33,14 +33,22 @@ A taste
 .. code-block:: python
 
    import pandas as pd
+   import numpy as np
    import raffalib
    import raffalib.pandas  # registers the `.raffa` accessor
 
    raffalib.create_logger(rich=False, fmt="{message}")
 
-   df = pd.read_csv("penguins.csv")
-   df = df.raffa.startlog().dropna().raffa.endlog(timeit=False)
-   # -> Removed 11/344 (3.20%) rows.
+   df = pd.DataFrame(
+       {
+           "species": ["Adelie", "Adelie", "Adelie", "Gentoo", "Gentoo", "Chinstrap"],
+           "bill_depth_mm": [18.7, np.nan, 18.0, np.nan, 16.3, 17.9],
+           "body_mass_g": [3750.0, 3800.0, np.nan, 4500.0, 5700.0, 3500.0],
+       }
+   )
+   df = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
+   # -> Removed 2/6 (33.33%) rows.
+   # -> Took: 0.01 seconds
 
 New here? Start with :doc:`quickstart`, then browse the :doc:`examples` for the
 full tour. The complete API reference is generated from the source docstrings

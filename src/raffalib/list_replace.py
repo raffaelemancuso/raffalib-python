@@ -28,6 +28,7 @@ def list_replace(lst, old, new):
 
     :Example:
 
+    >>> from raffalib import list_replace
     >>> lst = [1, 2, 3, 2, 4]
     >>> list_replace(lst, 2, 5)
     >>> lst

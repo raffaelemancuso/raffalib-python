@@ -24,6 +24,8 @@ stay in :mod:`raffalib.pandas` and :mod:`raffalib.polars`.
 
 import time
 import datetime
+from dataclasses import dataclass
+
 import humanize
 
 #: Message used when ``startlog(clone=False)`` prevents value-level comparison.
@@ -108,6 +110,91 @@ def changed_cells(nchanged: int, ntotal: int) -> str:
     if nchanged == 0:
         return "No changes detected."
     return f"Changed {ratio(nchanged, ntotal)} values."
+
+
+def prefix(custom_msg: str | None) -> str:
+    """
+    Render the optional user message that ``endlog`` prepends to its log line.
+
+    :param custom_msg: The caller-supplied message, or ``None``.
+    :type custom_msg: str | None
+    :return: ``""`` when ``custom_msg`` is ``None``, otherwise ``"{custom_msg}. "``.
+    :rtype: str
+    """
+    if custom_msg is None:
+        return ""
+    return f"{custom_msg}. "
+
+
+@dataclass(frozen=True)
+class JoinCounts:
+    """
+    Row-provenance counts for a mutating join, consumed by :func:`join_log`.
+
+    :ivar n_rows_joined: Number of rows in the joined output.
+    :ivar n_left_only: Output rows present only in the left table.
+    :ivar n_right_only: Output rows present only in the right table.
+    :ivar n_both: Output rows present in both tables.
+    :ivar n_left_dups: Duplicate left keys among the matched rows.
+    :ivar n_right_dups: Duplicate right keys among the matched rows.
+    :ivar n_left_dropped: Left input rows absent from the output.
+    :ivar n_left_total: Number of rows in the left input table.
+    :ivar n_right_dropped: Right input rows absent from the output.
+    :ivar n_right_total: Number of rows in the right input table.
+    """
+
+    n_rows_joined: int
+    n_left_only: int
+    n_right_only: int
+    n_both: int
+    n_left_dups: int
+    n_right_dups: int
+    n_left_dropped: int
+    n_left_total: int
+    n_right_dropped: int
+    n_right_total: int
+
+
+def join_log(counts: JoinCounts) -> str:
+    """
+    Build the row-provenance log for a mutating join.
+
+    Shared verbatim by the pandas and polars ``join`` accessors so the two
+    backends cannot drift apart.
+
+    :param counts: The row-provenance counts to report.
+    :type counts: JoinCounts
+    :return: The multi-line, newline-terminated log message.
+    :rtype: str
+    """
+    return (
+        f"Total rows in output table: {counts.n_rows_joined:,d}\n"
+        f"From left only: {ratio(counts.n_left_only, counts.n_rows_joined)}\n"
+        f"From right only: {ratio(counts.n_right_only, counts.n_rows_joined)}\n"
+        f"From both: {ratio(counts.n_both, counts.n_rows_joined)} "
+        f"(left dups {counts.n_left_dups}, right dups {counts.n_right_dups})\n"
+        f"Dropped rows from left: {ratio(counts.n_left_dropped, counts.n_left_total)}\n"
+        f"Dropped rows from right: {ratio(counts.n_right_dropped, counts.n_right_total)}\n"
+    )
+
+
+def filtering_join_log(n_var: int, n_rows_joined: int, n_initial: int) -> str:
+    """
+    Build the log for a filtering (``semi`` / ``anti``) join.
+
+    Shared verbatim by the pandas and polars ``join`` accessors.
+
+    :param n_var: Signed change in row count (``n_rows_joined - n_initial``).
+    :param n_rows_joined: Number of rows kept after the filtering join.
+    :param n_initial: Number of rows in the left input table.
+    :return: The single-line log message.
+    :rtype: str
+    """
+    return (
+        "Detected filtering join. "
+        f"Rows variation {ratio(n_var, n_initial)}, "
+        f"total rows after join: {ratio(n_rows_joined, n_initial)}"
+    )
 
 
 def elapsed(start_time_ns: int) -> str:

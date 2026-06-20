@@ -26,10 +26,52 @@ author = 'Raffaele Mancuso'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = [
-    'autoapi.extension'
+    'autoapi.extension',
+    'sphinx.ext.doctest',
 ]
 
 autoapi_dirs = ['../../src']
+
+# -- doctest configuration ---------------------------------------------------
+# The examples in the narrative docs are executable doctests, run with
+# ``sphinx-build -b doctest`` (``make doctest``). ELLIPSIS lets the
+# non-deterministic ``Took: ...`` timing lines match; NORMALIZE_WHITESPACE makes
+# the DataFrame/table reprs robust to incidental spacing differences.
+import doctest as _doctest
+
+doctest_default_flags = _doctest.ELLIPSIS | _doctest.NORMALIZE_WHITESPACE
+
+# Run once before every doctest group: import the libraries, route raffalib's
+# logging output to stdout so doctest can capture it (mirroring
+# ``create_logger(rich=False, fmt="{message}")``), and pin the table-rendering
+# width so the captured reprs are deterministic.
+doctest_global_setup = """
+import logging
+import numpy as np
+import pandas as pd
+import polars as pl
+import polars.selectors as cs
+import raffalib
+import raffalib.pandas
+import raffalib.polars
+
+
+class _DoctestLogHandler(logging.Handler):
+    def emit(self, record):
+        print(self.format(record))
+
+
+_handler = _DoctestLogHandler()
+_handler.setFormatter(logging.Formatter("%(message)s"))
+_raffalogger = logging.getLogger("raffalib")
+_raffalogger.handlers = [_handler]
+_raffalogger.setLevel(logging.INFO)
+_raffalogger.propagate = False
+
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", 200)
+pl.Config(thousands_separator=",", tbl_cols=-1, tbl_width_chars=200)
+"""
 
 # Document the class docstring and the __init__ docstring together.
 autoapi_python_class_content = "both"
