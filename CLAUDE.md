@@ -33,7 +33,8 @@ uv run --extra docs --extra pandas --extra polars \
   sphinx-build -b doctest docs/source docs/_build/doctest
 ```
 
-CI runs in two workflows: `.github/workflows/tests.yml` (pytest, with the
+CI runs in two workflows: `.github/workflows/tests.yml` (a `lint` job running
+`ruff check` + `ruff format --check`, and a `pytest` job with the
 pandas/polars/db/web/bibliometrics extras so nothing is skipped) and
 `.github/workflows/docs.yml` (the doctests above).
 

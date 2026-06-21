@@ -6,6 +6,21 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Ruff lint
+        run: uv run --extra dev ruff check
+
+      - name: Ruff format
+        run: uv run --extra dev ruff format --check
+
   pytest:
     name: Test suite
     runs-on: ubuntu-latest
