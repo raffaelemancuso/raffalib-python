@@ -73,11 +73,22 @@ class RaffaSeries:
             self._series._initial_series = None
         return self._series
 
-    def midlog(self, custom_msg: str | None = None, timeit: bool = True):
+    def midlog(
+        self, custom_msg: str | None = None, timeit: bool = True, clone: bool = False
+    ):
         """
-        Alias for `.endlog().startlog()`
+        Alias for `.endlog().startlog(clone=clone)`.
+
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :param clone: Forwarded to the restarted ``startlog``: clone the data so
+            the next segment can detect value-level changes when the shape is
+            unchanged.
+        :type clone: bool
         """
-        return self.endlog(custom_msg, timeit=timeit).startlog()
+        return self.endlog(custom_msg, timeit=timeit).raffa.startlog(clone=clone)
 
     def endlog(self, custom_msg: str | None = None, timeit: bool = True):
         """
@@ -179,12 +190,24 @@ class RaffaDataFrame:
         return self._df
 
     def midlog(
-        self, custom_msg: str | None = None, timeit: bool = True
+        self,
+        custom_msg: str | None = None,
+        timeit: bool = True,
+        clone: bool = False,
     ) -> pd.DataFrame:
         """
-        Alias for `.endlog().startlog()`
+        Alias for `.endlog().startlog(clone=clone)`.
+
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :param clone: Forwarded to the restarted ``startlog``: clone the data so
+            the next segment can detect value-level changes when the shape is
+            unchanged.
+        :type clone: bool
         """
-        return self.endlog(custom_msg, timeit=timeit).startlog()
+        return self.endlog(custom_msg, timeit=timeit).raffa.startlog(clone=clone)
 
     def endlog(
         self, custom_msg: str | None = None, timeit: bool = True

@@ -147,7 +147,7 @@ See the [Examples](https://raffalib-python.readthedocs.io) page for the full wal
 | Module                  | What it provides                                                        |
 | ----------------------- | ---------------------------------------------------------------------- |
 | `raffalib.pandas`       | `.raffa` accessor: `startlog`/`endlog`/`midlog`, `join`, `freq`, `to_docx`, `add_prefix_if_not_exists`, `get_duplicates`, `sort_columns` |
-| `raffalib.polars`       | `.raffa` namespace: logging, `freq`, `crosstab`, `join`, `replace_string_with_null`, `to_docx` |
+| `raffalib.polars`       | `.raffa` namespace: `startlog`/`endlog`/`midlog`, `freq`, `crosstab`, `join`, `replace_string_with_null`, `to_docx` |
 | `raffalib.logging`      | `create_logger` — opinionated logging setup (plain or `rich`)          |
 | `raffalib.export_docx`  | `DocxFile` — low-level Word document/table builder                     |
 | `raffalib.tqdm`         | `tqdm_batch` — batched progress bars                                    |

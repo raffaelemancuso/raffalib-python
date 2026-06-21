@@ -58,6 +58,31 @@ def test_series_endlog_matches_pandas_format(caplog):
     )
 
 
+def test_midlog_logs_then_restarts(caplog):
+    df = pl.DataFrame({"a": [1, 2, 3, 4]})
+    with caplog.at_level(logging.INFO, logger="raffalib.polars"):
+        df.raffa.startlog()
+        df = df.filter(pl.col("a") > 1)
+        df = df.raffa.midlog(timeit=False)  # logs the first step, restarts logging
+        df = df.filter(pl.col("a") > 2)
+        df.raffa.endlog(timeit=False)
+    msgs = [r.message for r in caplog.records]
+    assert any("Removed 1/4 (25.00%) rows. New shape: (3, 1)." in m for m in msgs)
+    assert any("Removed 1/3 (33.33%) rows. New shape: (2, 1)." in m for m in msgs)
+
+
+def test_midlog_clone_enables_value_diff(caplog):
+    df = pl.DataFrame({"a": [1, 2, 3, 4]})
+    with caplog.at_level(logging.INFO, logger="raffalib.polars"):
+        df.raffa.startlog()
+        df = df.filter(pl.col("a") > 1)
+        df = df.raffa.midlog(timeit=False, clone=True)  # restart WITH a clone
+        df = df.with_columns(pl.Series("a", [99, 3, 4]))
+        df.raffa.endlog(timeit=False)
+    msgs = [r.message for r in caplog.records]
+    assert any("Changed 1/3 (33.33%) values." in m for m in msgs)
+
+
 def test_endlog_timeit_appends_duration(caplog):
     df = pl.DataFrame({"a": [1, 2, 3]})
     with caplog.at_level(logging.INFO, logger="raffalib.polars"):

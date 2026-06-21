@@ -32,9 +32,11 @@ how many cell values changed.
    appends the elapsed time since ``startlog``. The signature is identical for
    pandas and polars.
 
-``midlog(custom_msg=None, timeit=True)`` *(pandas only)*
+``midlog(custom_msg=None, timeit=True, clone=False)``
    A convenience alias for ``endlog().startlog()`` — log the current step and
-   immediately start the next one.
+   immediately start the next one. Available on both pandas and polars. ``clone``
+   is forwarded to the restarted ``startlog``, so pass ``clone=True`` when the
+   next segment should detect value-level changes.
 
 Messages are emitted through the standard :mod:`logging` module. Configure it
 once with :func:`raffalib.create_logger` so the messages reach your console:

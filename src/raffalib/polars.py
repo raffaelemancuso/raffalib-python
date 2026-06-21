@@ -62,8 +62,8 @@ class RaffaPolarsSeriesUtils:
     The ``.raffa`` namespace on a :class:`polars.Series`.
 
     Registered automatically when :mod:`raffalib.polars` is imported. Provides
-    STATA-like change logging (:meth:`startlog` / :meth:`endlog`) and tabulation
-    helpers (:meth:`freq`, :meth:`crosstab`).
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`)
+    and tabulation helpers (:meth:`freq`, :meth:`crosstab`).
     """
 
     def __init__(self, series: pl.Series):
@@ -125,6 +125,23 @@ class RaffaPolarsSeriesUtils:
         logger.info(msg)
         return self._series
 
+    def midlog(
+        self, custom_msg: str | None = None, timeit: bool = True, clone: bool = False
+    ) -> pl.Series:
+        """
+        Alias for `.endlog().startlog(clone=clone)`.
+
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :param clone: Forwarded to the restarted ``startlog``: clone the data so
+            the next segment can detect value-level changes when the shape is
+            unchanged.
+        :type clone: bool
+        """
+        return self.endlog(custom_msg, timeit=timeit).raffa.startlog(clone=clone)
+
     def freq(self) -> pl.DataFrame:
         """
         Frequency table for the Series.
@@ -183,9 +200,9 @@ class RaffaPolarsDataFrameUtils:
     The ``.raffa`` namespace on a :class:`polars.DataFrame`.
 
     Registered automatically when :mod:`raffalib.polars` is imported. Provides
-    STATA-like change logging (:meth:`startlog` / :meth:`endlog`), a logging
-    :meth:`join` wrapper, tabulation helpers (:meth:`freq`, :meth:`crosstab`),
-    and :meth:`to_docx` export.
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`),
+    a logging :meth:`join` wrapper, tabulation helpers (:meth:`freq`,
+    :meth:`crosstab`), and :meth:`to_docx` export.
     """
 
     def __init__(self, df: pl.DataFrame):
@@ -253,6 +270,26 @@ class RaffaPolarsDataFrameUtils:
             msg += _logutils.elapsed(start_time)
         logger.info(msg)
         return self._df
+
+    def midlog(
+        self,
+        custom_msg: str | None = None,
+        timeit: bool = True,
+        clone: bool = False,
+    ) -> pl.DataFrame:
+        """
+        Alias for `.endlog().startlog(clone=clone)`.
+
+        :param custom_msg: A custom message to log before the actual log
+        :type custom_msg: str | None
+        :param timeit: Log the time it took for the operation
+        :type timeit: bool
+        :param clone: Forwarded to the restarted ``startlog``: clone the data so
+            the next segment can detect value-level changes when the shape is
+            unchanged.
+        :type clone: bool
+        """
+        return self.endlog(custom_msg, timeit=timeit).raffa.startlog(clone=clone)
 
     def replace_string_with_null(self, s):
         """
