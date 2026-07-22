@@ -16,7 +16,6 @@
 
 """Utilities for creating and exporting Word documents (.docx)."""
 
-import inspect
 from docx import Document
 from docx.shared import Pt, RGBColor, Mm
 from docx.oxml.ns import qn
@@ -68,6 +67,17 @@ class DocxFile:
     :type heading_space_before: int
     :param heading_space_after: Space after heading in points. Defaults to 6.
     :type heading_space_after: int
+    :param footnote_text: Optional note paragraph written after the table
+        (e.g. a significance-stars legend). Defaults to None.
+    :type footnote_text: str | None
+    :param footnote_font_name: Font name for the footnote. Defaults to "Aptos".
+    :type footnote_font_name: str
+    :param footnote_font_size: Font size for the footnote in points. Defaults to 10.
+    :type footnote_font_size: int
+    :param footnote_italic: Whether the footnote is italic. Defaults to False.
+    :type footnote_italic: bool
+    :param footnote_space_before: Space before the footnote in points. Defaults to 6.
+    :type footnote_space_before: int
     """
 
     def __init__(
@@ -88,6 +98,11 @@ class DocxFile:
         heading_color: tuple[int, int, int] = (0x00, 0x00, 0x00),
         heading_space_before: int = 0,
         heading_space_after: int = 6,
+        footnote_text: str | None = None,
+        footnote_font_name: str = "Aptos",
+        footnote_font_size: int = 10,
+        footnote_italic: bool = False,
+        footnote_space_before: int = 6,
     ):
 
         # create new document
@@ -143,6 +158,12 @@ class DocxFile:
             paragraph_format.space_after = Pt(heading_space_after)
             paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
 
+        self.footnote_text = footnote_text
+        self.footnote_font_name = footnote_font_name
+        self.footnote_font_size = footnote_font_size
+        self.footnote_italic = footnote_italic
+        self.footnote_space_before = footnote_space_before
+
         self.table = None
 
     def add_table(
@@ -156,6 +177,7 @@ class DocxFile:
         table_header_font_name: str = "Aptos",
         table_header_font_size: int = 12,
         table_header_font_bold: bool = True,
+        table_header_rows: int = 1,
     ):
         """
         Add a table to the document.
@@ -172,16 +194,20 @@ class DocxFile:
         :type table_font_name: str
         :param table_font_size: Font size for table cells. Defaults to 12.
         :type table_font_size: int
-        :param table_header_font_name: Font name for header row. Defaults to "Aptos".
+        :param table_header_font_name: Font name for header rows. Defaults to "Aptos".
         :type table_header_font_name: str
-        :param table_header_font_size: Font size for header row. Defaults to 12.
+        :param table_header_font_size: Font size for header rows. Defaults to 12.
         :type table_header_font_size: int
-        :param table_header_font_bold: Whether header row is bold. Defaults to True.
+        :param table_header_font_bold: Whether header rows are bold. Defaults to True.
         :type table_header_font_bold: bool
+        :param table_header_rows: Number of leading rows styled as header
+            (e.g. one per level of a pandas MultiIndex). Defaults to 1.
+        :type table_header_rows: int
         """
 
         # Create table
         self.table_autofit = table_autofit
+        self.table_header_rows = table_header_rows
         self.table = self.doc.add_table(n_rows, n_cols)
 
         # Set table style
@@ -202,46 +228,6 @@ class DocxFile:
         font = style.font
         font.name = table_font_name
         font.size = Pt(table_font_size)
-
-    @classmethod
-    def with_table(cls, n_rows: int, n_cols: int, **kwargs) -> "DocxFile":
-        """
-        Build a :class:`DocxFile` and add a table to it in a single call.
-
-        Each keyword argument is routed to either :meth:`__init__` (document- and
-        heading-level options such as ``landscape`` or ``heading_text``) or
-        :meth:`add_table` (table-level options such as ``table_style`` or
-        ``table_font_size``), based on which method accepts it.
-
-        :param n_rows: Number of rows in the table.
-        :type n_rows: int
-        :param n_cols: Number of columns in the table.
-        :type n_cols: int
-        :param kwargs: Options forwarded to :meth:`__init__` or :meth:`add_table`.
-        :return: A DocxFile with the table created and accessible via ``.table``.
-        :rtype: DocxFile
-        :raises TypeError: If a keyword argument is accepted by neither method.
-        """
-        init_params = set(inspect.signature(cls.__init__).parameters) - {"self"}
-        table_params = set(inspect.signature(cls.add_table).parameters) - {
-            "self",
-            "n_rows",
-            "n_cols",
-        }
-        doc_kwargs: dict = {}
-        table_kwargs: dict = {}
-        for key, value in kwargs.items():
-            if key in init_params:
-                doc_kwargs[key] = value
-            elif key in table_params:
-                table_kwargs[key] = value
-            else:
-                raise TypeError(
-                    f"DocxFile.with_table() got an unexpected keyword argument {key!r}"
-                )
-        doc = cls(**doc_kwargs)
-        doc.add_table(n_rows, n_cols, **table_kwargs)
-        return doc
 
     # Additional workaround to make autofit actually work
     # See: https://github.com/python-openxml/python-docx/issues/209#issuecomment-566128709
@@ -330,16 +316,26 @@ class DocxFile:
             if self.table_autofit:
                 self._table_autofit_hotfix()
 
-            # Set table text style for header (row 0)
-            for cell in self.table.rows[0].cells:
-                for paragraph in cell.paragraphs:
-                    paragraph.style = "CellHeader"
+            # Set table text style for header rows
+            for row in self.table.rows[: self.table_header_rows]:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        paragraph.style = "CellHeader"
 
-            # Set table text style for data cells (rows >= 1)
-            for row in self.table.rows[1:]:
+            # Set table text style for data cells
+            for row in self.table.rows[self.table_header_rows :]:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
                         paragraph.style = "CellText"  # assuming style named "Cell Text"
+
+        # Footnote paragraph (appended at the end of the body, i.e. after the table)
+        if self.footnote_text:
+            paragraph = self.doc.add_paragraph()
+            paragraph.paragraph_format.space_before = Pt(self.footnote_space_before)
+            run = paragraph.add_run(self.footnote_text)
+            run.font.name = self.footnote_font_name
+            run.font.size = Pt(self.footnote_font_size)
+            run.font.italic = self.footnote_italic
 
         # save the doc
         self.doc.save(outfp)

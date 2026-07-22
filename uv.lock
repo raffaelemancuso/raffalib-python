@@ -579,19 +579,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyalex"
-version = "0.21"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "requests" },
-    { name = "urllib3" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c7/8a/5e270c3d6021a873667be7469fb95b00e0584593d57b7773ef0db6841cef/pyalex-0.21.tar.gz", hash = "sha256:39f470885187e0e411798d34163453361a3834c4dae53f0a18f272475b749741", size = 52593, upload-time = "2026-02-23T14:11:13.421Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/b6/714246176f5ad319dc1d06607a093570bc3d2c37de6d5583e106762883a5/pyalex-0.21-py3-none-any.whl", hash = "sha256:988c37eb31ee3d23176b431d37f7e18c37817317d976237abcc6f3c02f92396f", size = 15761, upload-time = "2026-02-23T14:11:12.523Z" },
-]
-
-[[package]]
 name = "pycparser"
 version = "3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -711,7 +698,6 @@ dependencies = [
 [package.optional-dependencies]
 bibliometrics = [
     { name = "fake-useragent" },
-    { name = "pyalex" },
 ]
 db = [
     { name = "sqlalchemy" },
@@ -748,7 +734,6 @@ requires-dist = [
     { name = "polars", marker = "extra == 'polars'", specifier = ">=1.38.1" },
     { name = "polars-config-meta", marker = "extra == 'polars'", specifier = ">=0.3.1" },
     { name = "polars-permute", marker = "extra == 'polars'", specifier = ">=0.1.6" },
-    { name = "pyalex", marker = "extra == 'bibliometrics'", specifier = ">=0.21" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
     { name = "python-docx", specifier = ">=1.2.0" },
     { name = "rich", specifier = ">=14.2.0" },

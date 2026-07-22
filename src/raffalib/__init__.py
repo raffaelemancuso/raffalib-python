@@ -21,9 +21,9 @@ This library enriches pandas and polars with STATA-like logging and .docx export
 It also provides utilities for backup files, logging configuration, progress bars, and more.
 """
 
-# from .check_openalex_api_key import check_openalex_api_key
 from .tqdm import tqdm_batch
 from .logging import create_logger
 from .list_replace import list_replace
+from .report import report_build, report_save
 
-__all__ = ["tqdm_batch", "create_logger", "list_replace"]
+__all__ = ["tqdm_batch", "create_logger", "list_replace", "report_build", "report_save"]

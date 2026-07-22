@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 feature is **STATA-like change logging** layered onto pandas and polars via a
 `.raffa` accessor/namespace, plus `.docx` export. It also bundles small,
 mostly-independent utilities (logging setup, pickling, progress bars, Selenium,
-SQLAlchemy view helpers, bibliometrics/Scopus/OpenAlex helpers).
+SQLAlchemy view helpers, bibliometrics/Scopus helpers).
 
 Packaged with the `uv_build` backend in a **src layout** (`src/raffalib/`).
 
@@ -96,11 +96,12 @@ move them to the end).
 
 `export_docx.py` holds `DocxFile`, a python-docx wrapper for page setup,
 styled tables, and matplotlib/plotly figures. The `DataFrame.raffa.to_docx()`
-methods build the table cell-by-cell on top of it. Note `DocxFile.with_table()`
-introspects the signatures of `__init__` and `add_table` to **route each kwarg**
-to the right method, raising `TypeError` on unknown keys — this is why
-`to_docx(..., heading_text=..., table_style=...)` "just works" with mixed
-document- and table-level options.
+methods build the table cell-by-cell on top of it and take **two separate
+dicts**: `doc_options` goes to `DocxFile.__init__` (document/heading options
+such as `heading_text` or `landscape`) and `table_options` to `add_table`
+(table options such as `table_style`). The pandas backend renders MultiIndex
+columns as one merged header row per level and injects `table_header_rows`
+into `table_options` unless the caller sets it explicitly.
 
 ### `logging.py`
 
@@ -110,9 +111,15 @@ output (plain `StreamHandler` or `rich.RichHandler`). It re-enables the
 
 ## Conventions
 
+- **Every pandas/polars extension lives on the `.raffa` namespace**: all
+  Series/DataFrame helper functions are methods of the registered `.raffa`
+  accessor (pandas) / namespace (polars) classes — e.g. `s.raffa.toset()`,
+  `df.raffa.join(...)`. Never monkey-patch methods directly onto
+  `pd.Series` / `pd.DataFrame` / `pl.Series` / `pl.DataFrame`; add new helpers
+  to the corresponding `Raffa*` class instead.
 - **Optional deps are real**: only `humanize`, `jsonpickle`, `natsort`,
   `python-docx`, `rich`, `tqdm` are core. pandas, polars, sqlalchemy, selenium,
-  pyalex, etc. live behind extras (see `pyproject.toml`). Tests guard their
+  etc. live behind extras (see `pyproject.toml`). Tests guard their
   imports with `pytest.importorskip(...)` so the suite passes without every
   extra installed — follow that pattern for any new optional-dep test.
 - Every source file carries the **GPL-3.0-or-later license header**. Keep it on

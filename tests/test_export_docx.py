@@ -52,18 +52,29 @@ def test_save_without_table(tmp_path):
     assert out.exists()
 
 
-def test_with_table_routes_init_and_table_kwargs(tmp_path):
-    # heading_text -> __init__, table_style -> add_table; both must apply
-    doc = DocxFile.with_table(2, 2, heading_text="My Heading", table_style="Light Grid")
-    out = tmp_path / "routed.docx"
+def test_footnote_written_after_table(tmp_path):
+    doc = DocxFile(footnote_text="Note: * p < 0.05.")
+    doc.add_table(2, 2)
+    out = tmp_path / "footnote.docx"
+    doc.save(out)
+
+    reopened = Document(str(out))
+    # the footnote must be the last block-level element, i.e. after the table
+    body_elements = list(reopened.element.body)
+    tbl_pos = next(i for i, el in enumerate(body_elements) if el.tag.endswith("}tbl"))
+    footnote_paras = [p for p in reopened.paragraphs if p.text == "Note: * p < 0.05."]
+    assert len(footnote_paras) == 1
+    para_pos = body_elements.index(footnote_paras[0]._p)
+    assert para_pos > tbl_pos
+
+
+def test_init_and_add_table_options_apply(tmp_path):
+    doc = DocxFile(heading_text="My Heading")
+    doc.add_table(2, 2, table_style="Light Grid")
+    out = tmp_path / "styled.docx"
     doc.save(out)
 
     reopened = Document(str(out))
     assert "My Heading" in [p.text for p in reopened.paragraphs]
     assert len(reopened.tables) == 1
     assert reopened.tables[0].style.name == "Light Grid"
-
-
-def test_with_table_rejects_unknown_kwarg():
-    with pytest.raises(TypeError, match="unexpected keyword argument 'bogus'"):
-        DocxFile.with_table(2, 2, bogus=123)

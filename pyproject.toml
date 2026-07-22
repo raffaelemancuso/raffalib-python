@@ -30,7 +30,6 @@ polars = [
 ]
 bibliometrics = [
     "fake-useragent>=2.2.0",
-    "pyalex>=0.21",
 ]
 db = [
     "sqlalchemy>=2.0.48",

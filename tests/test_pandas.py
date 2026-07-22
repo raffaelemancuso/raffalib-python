@@ -35,6 +35,18 @@ def test_series_freq():
     assert f.index.name == "letter"
 
 
+def test_series_toset():
+    s = pd.Series([3, 1, 2, 1, 3])
+    assert s.raffa.toset() == {1, 2, 3}
+
+
+def test_series_toset_keeps_nan_unless_dropped():
+    s = pd.Series([1.0, None, 1.0])
+    out = s.raffa.toset()
+    assert len(out) == 2  # {1.0, nan}
+    assert s.dropna().raffa.toset() == {1.0}
+
+
 def test_dataframe_freq_delegates_to_series():
     df = pd.DataFrame({"letter": ["a", "a", "b"]})
     f = df.raffa.freq("letter")
@@ -48,7 +60,7 @@ def test_endlog_logs_removed_rows(caplog):
         df = df[df["a"] > 1]
         df.raffa.endlog()
     assert any(
-        "Removed 1/4 (25.00%) rows. New shape: (3, 1)." in r.message
+        "Removed 1/4 (25.00%) rows. New shape: (3; 1)." in r.message
         for r in caplog.records
     )
 
@@ -77,7 +89,7 @@ def test_series_endlog_removed_values(caplog):
         s = s[s > 2]
         s.raffa.endlog()
     assert any(
-        "Removed 2/5 (40.00%) values. New shape: (3,)." in r.message
+        "Removed 2/5 (40.00%) values. New shape: (3)." in r.message
         for r in caplog.records
     )
 
@@ -91,8 +103,8 @@ def test_midlog_logs_then_restarts(caplog):
         df = df[df["a"] > 2]
         df.raffa.endlog(timeit=False)
     msgs = [r.message for r in caplog.records]
-    assert any("Removed 1/4 (25.00%) rows. New shape: (3, 1)." in m for m in msgs)
-    assert any("Removed 1/3 (33.33%) rows. New shape: (2, 1)." in m for m in msgs)
+    assert any("Removed 1/4 (25.00%) rows. New shape: (3; 1)." in m for m in msgs)
+    assert any("Removed 1/3 (33.33%) rows. New shape: (2; 1)." in m for m in msgs)
 
 
 def test_midlog_clone_enables_value_diff(caplog):
@@ -132,7 +144,8 @@ def test_join_left_logs_row_provenance(caplog):
     log = "\n".join(r.message for r in caplog.records)
     assert "From left only: 2/4 (50.00%)" in log
     assert "From both: 2/4 (50.00%)" in log
-    assert "Dropped rows from left: 0/4 (0.00%)" in log
+    assert "Left input rows absent from the output: 0/4 (0.00%)" in log
+    assert "Join cardinality: one-to-one" in log
 
 
 def test_join_semi_is_detected_as_filtering(caplog):
@@ -160,7 +173,7 @@ def test_endlog_add_rows_to_empty_frame_is_guarded(caplog):
         df = df.reindex(range(3))
         df.raffa.endlog(timeit=False)
     assert any(
-        "Added 3/0 (N/A) rows. New shape: (3, 1)." in r.message for r in caplog.records
+        "Added 3/0 (N/A) rows. New shape: (3; 1)." in r.message for r in caplog.records
     )
 
 
@@ -188,8 +201,62 @@ def test_to_docx_applies_heading_and_table_options(tmp_path):
     df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
     out = tmp_path / "styled.docx"
     df.raffa.to_docx(
-        out, include_index=False, heading_text="Table 1", table_style="Light Grid"
+        out,
+        include_index=False,
+        doc_options={"heading_text": "Table 1"},
+        table_options={"table_style": "Light Grid"},
     )
     reopened = Document(str(out))
     assert "Table 1" in [p.text for p in reopened.paragraphs]
     assert reopened.tables[0].style.name == "Light Grid"
+
+
+def test_to_docx_multiindex_columns_merges_header(tmp_path):
+    pytest.importorskip("docx")
+    from docx import Document
+
+    cols = pd.MultiIndex.from_product(
+        [["2014-2020", "2021-2027"], ["NUTS 0", "NUTS 2"]]
+    )
+    df = pd.DataFrame(
+        [[1, 2, 3, 4], [5, 6, 7, 8]], index=["Austria", "Belgium"], columns=cols
+    )
+    df.index.name = "Country"
+    out = tmp_path / "mi.docx"
+    df.raffa.to_docx(out)
+    t = Document(str(out)).tables[0]
+
+    # two header rows (one per column level) + two data rows
+    assert len(t.rows) == 2 + 2
+
+    # top header row: each group label spans its two leaf columns
+    top = t.rows[0].cells
+    assert [c.text for c in top] == [
+        "",
+        "2014-2020",
+        "2014-2020",
+        "2021-2027",
+        "2021-2027",
+    ]
+    assert top[1]._tc is top[2]._tc  # merged
+    assert top[3]._tc is top[4]._tc  # merged
+    assert top[0]._tc is not top[1]._tc  # index column not merged into groups
+
+    # bottom header row: index name + leaf labels, no merging
+    bottom = t.rows[1].cells
+    assert [c.text for c in bottom] == [
+        "Country",
+        "NUTS 0",
+        "NUTS 2",
+        "NUTS 0",
+        "NUTS 2",
+    ]
+    assert len({c._tc for c in bottom}) == 5
+
+    # both header rows get the header style; data rows do not
+    assert t.rows[1].cells[1].paragraphs[0].style.name == "CellHeader"
+    assert t.rows[2].cells[1].paragraphs[0].style.name == "CellText"
+
+    # data rows keep index values and cell values aligned
+    assert [c.text for c in t.rows[2].cells] == ["Austria", "1", "2", "3", "4"]
+    assert [c.text for c in t.rows[3].cells] == ["Belgium", "5", "6", "7", "8"]

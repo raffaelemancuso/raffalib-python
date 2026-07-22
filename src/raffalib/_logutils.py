@@ -83,10 +83,10 @@ def new_shape(shape: tuple[int, ...]) -> str:
     :param shape: The shape tuple after the operation (``(n,)`` for a Series,
         ``(n_rows, n_cols)`` for a DataFrame).
     :type shape: tuple[int, ...]
-    :return: A message like ``"New shape: (8, 6)."``.
+    :return: A message like ``"New shape: (8,000; 6)."``.
     :rtype: str
     """
-    return f"New shape: {shape}."
+    return f"New shape: ({'; '.join(f'{n:,d}' for n in shape)})."
 
 
 def series_shape_delta(initial_shape: tuple[int], final_shape: tuple[int]) -> str:
@@ -172,8 +172,12 @@ class JoinCounts:
     :ivar n_left_only: Output rows present only in the left table.
     :ivar n_right_only: Output rows present only in the right table.
     :ivar n_both: Output rows present in both tables.
-    :ivar n_left_dups: Duplicate left keys among the matched rows.
-    :ivar n_right_dups: Duplicate right keys among the matched rows.
+    :ivar n_left_dups: Matched output rows that share their left source row
+        with at least one other output row (left-side fan-out); see
+        :func:`join_log` for the exact semantics and examples.
+    :ivar n_right_dups: Matched output rows that share their right source row
+        with at least one other output row (right-side fan-out); see
+        :func:`join_log` for the exact semantics and examples.
     :ivar n_left_dropped: Left input rows absent from the output.
     :ivar n_left_total: Number of rows in the left input table.
     :ivar n_right_dropped: Right input rows absent from the output.
@@ -192,12 +196,66 @@ class JoinCounts:
     n_right_total: int
 
 
+def join_cardinality(counts: JoinCounts) -> str:
+    """
+    Classify the realized cardinality of a mutating join.
+
+    The classification reflects the matches that actually occurred, not the
+    uniqueness of the join keys in the inputs: a join between tables with
+    duplicated keys is still reported as one-to-one when no duplicated key
+    found a match. ``n_left_dups > 0`` means some left row matched several
+    right rows (a "many" on the right side), and symmetrically for
+    ``n_right_dups``; see :func:`join_log` for how the two counters are
+    measured.
+
+    :param counts: The row-provenance counts to classify.
+    :type counts: JoinCounts
+    :return: ``"one-to-one"``, ``"many-to-one"``, ``"one-to-many"``,
+        ``"many-to-many"``, or ``"N/A (no matched rows)"``.
+    :rtype: str
+    """
+    if counts.n_both == 0:
+        return "N/A (no matched rows)"
+    if counts.n_left_dups == 0 and counts.n_right_dups == 0:
+        return "one-to-one"
+    if counts.n_left_dups == 0:
+        return "many-to-one"
+    if counts.n_right_dups == 0:
+        return "one-to-many"
+    return "many-to-many"
+
+
 def join_log(counts: JoinCounts) -> str:
     """
     Build the row-provenance log for a mutating join.
 
     Shared verbatim by the pandas and polars ``join`` accessors so the two
-    backends cannot drift apart.
+    backends cannot drift apart. Indentation uses spaces, not tabs, because
+    the message is reproduced in doctests (``docs/source/examples.rst``) and
+    doctest cannot match tab characters in expected output.
+
+    ``n_left_dups`` and ``n_right_dups`` measure key fan-out among the matched
+    ("from both") output rows. Each output row remembers which left and right
+    input row it came from; ``n_left_dups`` is the number of matched output
+    rows whose left source row also produced at least one *other* output row,
+    i.e. rows that exist because one left row matched several right rows.
+    ``n_right_dups`` is the mirror image. Every member of a duplicated group
+    is counted, not only the extra copies (both backends mark duplicates with
+    keep-all semantics: pandas ``duplicated(keep=False)``, polars
+    ``is_duplicated()``). Both counters are 0 when the join is one-to-one on
+    the matched keys. The reported join cardinality follows from the two
+    counters via :func:`join_cardinality`.
+
+    Examples, joining on key ``k``:
+
+    - One-to-many: left has one row with ``k=a``, right has three rows with
+      ``k=a``. The output has three matched rows, all copies of the same left
+      row, each right row used once: ``n_left_dups == 3``,
+      ``n_right_dups == 0``, cardinality ``one-to-many``.
+    - Many-to-many: left has two rows with ``k=a``, right has two rows with
+      ``k=a``. The output has the four cross-product rows; every left and
+      every right row is used twice: ``n_left_dups == 4``,
+      ``n_right_dups == 4``, cardinality ``many-to-many``.
 
     :param counts: The row-provenance counts to report.
     :type counts: JoinCounts
@@ -206,12 +264,14 @@ def join_log(counts: JoinCounts) -> str:
     """
     return (
         f"Total rows in output table: {counts.n_rows_joined:,d}\n"
-        f"From left only: {ratio(counts.n_left_only, counts.n_rows_joined)}\n"
-        f"From right only: {ratio(counts.n_right_only, counts.n_rows_joined)}\n"
-        f"From both: {ratio(counts.n_both, counts.n_rows_joined)} "
-        f"(left dups {counts.n_left_dups}, right dups {counts.n_right_dups})\n"
-        f"Dropped rows from left: {ratio(counts.n_left_dropped, counts.n_left_total)}\n"
-        f"Dropped rows from right: {ratio(counts.n_right_dropped, counts.n_right_total)}\n"
+        f"    From left only: {ratio(counts.n_left_only, counts.n_rows_joined)}\n"
+        f"    From right only: {ratio(counts.n_right_only, counts.n_rows_joined)}\n"
+        f"    From both: {ratio(counts.n_both, counts.n_rows_joined)}\n"
+        f"        Duplicate left keys among the matched rows: {counts.n_left_dups}\n"
+        f"        Duplicate right keys among the matched rows: {counts.n_right_dups}\n"
+        f"        Join cardinality: {join_cardinality(counts)}\n"
+        f"Left input rows absent from the output: {ratio(counts.n_left_dropped, counts.n_left_total)}\n"
+        f"Right input rows absent from the output: {ratio(counts.n_right_dropped, counts.n_right_total)}\n"
     )
 
 

@@ -1,5 +1,7 @@
 import time
 
+import pytest
+
 from raffalib import _logutils
 
 
@@ -37,13 +39,13 @@ def test_count_delta_thousands_separator():
 def test_dataframe_shape_delta_rows_and_columns():
     msg = _logutils.dataframe_shape_delta((10, 5), (8, 6))
     assert msg == (
-        "Removed 2/10 (20.00%) rows.Added 1/5 (20.00%) columns. New shape: (8, 6)."
+        "Removed 2/10 (20.00%) rows.Added 1/5 (20.00%) columns. New shape: (8; 6)."
     )
 
 
 def test_dataframe_shape_delta_rows_only():
     assert _logutils.dataframe_shape_delta((10, 5), (7, 5)) == (
-        "Removed 3/10 (30.00%) rows. New shape: (7, 5)."
+        "Removed 3/10 (30.00%) rows. New shape: (7; 5)."
     )
 
 
@@ -52,22 +54,22 @@ def test_dataframe_shape_delta_no_change_is_empty():
 
 
 def test_new_shape_dataframe():
-    assert _logutils.new_shape((8, 6)) == "New shape: (8, 6)."
+    assert _logutils.new_shape((8, 6)) == "New shape: (8; 6)."
 
 
 def test_new_shape_series():
-    assert _logutils.new_shape((8,)) == "New shape: (8,)."
+    assert _logutils.new_shape((8,)) == "New shape: (8)."
 
 
 def test_series_shape_delta_removed():
     assert _logutils.series_shape_delta((5,), (3,)) == (
-        "Removed 2/5 (40.00%) values. New shape: (3,)."
+        "Removed 2/5 (40.00%) values. New shape: (3)."
     )
 
 
 def test_series_shape_delta_added():
     assert _logutils.series_shape_delta((3,), (5,)) == (
-        "Added 2/3 (66.67%) values. New shape: (5,)."
+        "Added 2/3 (66.67%) values. New shape: (5)."
     )
 
 
@@ -137,11 +139,14 @@ def test_join_log_matches_expected_layout():
     )
     assert msg == (
         "Total rows in output table: 4\n"
-        "From left only: 1/4 (25.00%)\n"
-        "From right only: 0/4 (0.00%)\n"
-        "From both: 3/4 (75.00%) (left dups 0, right dups 0)\n"
-        "Dropped rows from left: 0/4 (0.00%)\n"
-        "Dropped rows from right: 2/5 (40.00%)\n"
+        "    From left only: 1/4 (25.00%)\n"
+        "    From right only: 0/4 (0.00%)\n"
+        "    From both: 3/4 (75.00%)\n"
+        "        Duplicate left keys among the matched rows: 0\n"
+        "        Duplicate right keys among the matched rows: 0\n"
+        "        Join cardinality: one-to-one\n"
+        "Left input rows absent from the output: 0/4 (0.00%)\n"
+        "Right input rows absent from the output: 2/5 (40.00%)\n"
     )
 
 
@@ -162,3 +167,31 @@ def test_join_log_guards_zero_denominators():
     )
     assert "Total rows in output table: 0" in msg
     assert "From both: 0/0 (N/A)" in msg
+    assert "Join cardinality: N/A (no matched rows)" in msg
+
+
+@pytest.mark.parametrize(
+    ("n_both", "n_left_dups", "n_right_dups", "expected"),
+    [
+        (3, 0, 0, "one-to-one"),
+        (2, 0, 2, "many-to-one"),
+        (2, 2, 0, "one-to-many"),
+        (4, 4, 4, "many-to-many"),
+        (0, 0, 0, "N/A (no matched rows)"),
+    ],
+)
+def test_join_cardinality(n_both, n_left_dups, n_right_dups, expected):
+    counts = _logutils.JoinCounts(
+        n_rows_joined=n_both,
+        n_left_only=0,
+        n_right_only=0,
+        n_both=n_both,
+        n_left_dups=n_left_dups,
+        n_right_dups=n_right_dups,
+        n_left_dropped=0,
+        n_left_total=4,
+        n_right_dropped=0,
+        n_right_total=5,
+    )
+    assert _logutils.join_cardinality(counts) == expected
+    assert f"Join cardinality: {expected}" in _logutils.join_log(counts)

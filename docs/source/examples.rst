@@ -88,17 +88,17 @@ Removing rows, filtering, or dropping columns changes the shape, which is
 logged automatically:
 
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) rows. New shape: (8, 8).
+Removed 2/10 (20.00%) rows. New shape: (8; 8).
 >>> _ = df.raffa.startlog().query("species=='Adelie'").raffa.endlog(timeit=False)
-Removed 5/10 (50.00%) rows. New shape: (5, 8).
+Removed 5/10 (50.00%) rows. New shape: (5; 8).
 >>> _ = df.raffa.startlog().drop(["bill_length_mm", "bill_depth_mm"], axis=1).raffa.endlog(timeit=False)
-Removed 2/8 (25.00%) columns. New shape: (10, 6).
+Removed 2/8 (25.00%) columns. New shape: (10; 6).
 
 With the default ``timeit=True``, ``endlog`` appends the elapsed time on a
 second line (the duration varies from run to run):
 
 >>> _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog()
-Removed 2/10 (20.00%) rows. New shape: (8, 8).
+Removed 2/10 (20.00%) rows. New shape: (8; 8).
 Took: ...
 
 Operations that change values but not the shape need ``clone=True`` so the
@@ -113,7 +113,7 @@ The same accessor is available on a Series:
 
 >>> s = df["bill_length_mm"]
 >>> _ = s.raffa.startlog().dropna().raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) values. New shape: (8,).
+Removed 2/10 (20.00%) values. New shape: (8).
 >>> _ = s.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
 Changed 2/10 (20.00%) values.
 
@@ -157,41 +157,53 @@ Outer join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="outer")
 Total rows in output table: 6
-From left only: 1/6 (16.67%)
-From right only: 2/6 (33.33%)
-From both: 3/6 (50.00%) (left dups 0, right dups 0)
-Dropped rows from left: 0/4 (0.00%)
-Dropped rows from right: 0/5 (0.00%)
+    From left only: 1/6 (16.67%)
+    From right only: 2/6 (33.33%)
+    From both: 3/6 (50.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 0/4 (0.00%)
+Right input rows absent from the output: 0/5 (0.00%)
 
 Inner join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="inner")
 Total rows in output table: 3
-From left only: 0/3 (0.00%)
-From right only: 0/3 (0.00%)
-From both: 3/3 (100.00%) (left dups 0, right dups 0)
-Dropped rows from left: 1/4 (25.00%)
-Dropped rows from right: 2/5 (40.00%)
+    From left only: 0/3 (0.00%)
+    From right only: 0/3 (0.00%)
+    From both: 3/3 (100.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 1/4 (25.00%)
+Right input rows absent from the output: 2/5 (40.00%)
 
 Left join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="left")
 Total rows in output table: 4
-From left only: 1/4 (25.00%)
-From right only: 0/4 (0.00%)
-From both: 3/4 (75.00%) (left dups 0, right dups 0)
-Dropped rows from left: 0/4 (0.00%)
-Dropped rows from right: 2/5 (40.00%)
+    From left only: 1/4 (25.00%)
+    From right only: 0/4 (0.00%)
+    From both: 3/4 (75.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 0/4 (0.00%)
+Right input rows absent from the output: 2/5 (40.00%)
 
 Right join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="right")
 Total rows in output table: 5
-From left only: 0/5 (0.00%)
-From right only: 2/5 (40.00%)
-From both: 3/5 (60.00%) (left dups 0, right dups 0)
-Dropped rows from left: 1/4 (25.00%)
-Dropped rows from right: 0/5 (0.00%)
+    From left only: 0/5 (0.00%)
+    From right only: 2/5 (40.00%)
+    From both: 3/5 (60.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 1/4 (25.00%)
+Right input rows absent from the output: 0/5 (0.00%)
 
 Filtering joins
 ---------------
@@ -216,13 +228,18 @@ Export a DataFrame to a Word ``.docx`` table:
 
    df.head(5).raffa.to_docx("table.docx")
 
-Keyword arguments are forwarded to :class:`~raffalib.export_docx.DocxFile` —
-document and heading options (e.g. ``heading_text``, ``landscape``) — or to its
-``add_table`` method — table options (e.g. ``table_style``, ``table_font_size``):
+Document and heading options (e.g. ``heading_text``, ``landscape``) are passed
+in ``doc_options`` and forwarded to :class:`~raffalib.export_docx.DocxFile`;
+table options (e.g. ``table_style``, ``table_font_size``) are passed in
+``table_options`` and forwarded to its ``add_table`` method:
 
 .. code-block:: python
 
-   df.head(5).raffa.to_docx("table.docx", heading_text="Table 1", table_style="Light Grid")
+   df.head(5).raffa.to_docx(
+       "table.docx",
+       doc_options={"heading_text": "Table 1"},
+       table_options={"table_style": "Light Grid"},
+   )
 
 ******
 polars
@@ -267,17 +284,17 @@ Removing rows with nulls, filtering values, or selecting columns changes the
 shape, which is logged:
 
 >>> _ = df.raffa.startlog().drop_nulls(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-Removed 2/10 (20.00%) rows. New shape: (8, 8).
+Removed 2/10 (20.00%) rows. New shape: (8; 8).
 >>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog(timeit=False)
-Removed 5/10 (50.00%) rows. New shape: (5, 8).
+Removed 5/10 (50.00%) rows. New shape: (5; 8).
 >>> _ = df.raffa.startlog().select(pl.exclude(["bill_length_mm", "bill_depth_mm"])).raffa.endlog(timeit=False)
-Removed 2/8 (25.00%) columns. New shape: (10, 6).
+Removed 2/8 (25.00%) columns. New shape: (10; 6).
 
 As with pandas, the default ``timeit=True`` appends the elapsed time on a second
 line (the duration varies from run to run):
 
 >>> _ = df.raffa.startlog().filter(pl.col("species")=="Adelie").raffa.endlog()
-Removed 5/10 (50.00%) rows. New shape: (5, 8).
+Removed 5/10 (50.00%) rows. New shape: (5; 8).
 Took: ...
 
 Operations that change values but not the shape need ``clone=True``:
@@ -384,41 +401,53 @@ Outer join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="outer")
 Total rows in output table: 6
-From left only: 1/6 (16.67%)
-From right only: 2/6 (33.33%)
-From both: 3/6 (50.00%) (left dups 0, right dups 0)
-Dropped rows from left: 0/4 (0.00%)
-Dropped rows from right: 0/5 (0.00%)
+    From left only: 1/6 (16.67%)
+    From right only: 2/6 (33.33%)
+    From both: 3/6 (50.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 0/4 (0.00%)
+Right input rows absent from the output: 0/5 (0.00%)
 
 Inner join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="inner")
 Total rows in output table: 3
-From left only: 0/3 (0.00%)
-From right only: 0/3 (0.00%)
-From both: 3/3 (100.00%) (left dups 0, right dups 0)
-Dropped rows from left: 1/4 (25.00%)
-Dropped rows from right: 2/5 (40.00%)
+    From left only: 0/3 (0.00%)
+    From right only: 0/3 (0.00%)
+    From both: 3/3 (100.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 1/4 (25.00%)
+Right input rows absent from the output: 2/5 (40.00%)
 
 Left join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="left")
 Total rows in output table: 4
-From left only: 1/4 (25.00%)
-From right only: 0/4 (0.00%)
-From both: 3/4 (75.00%) (left dups 0, right dups 0)
-Dropped rows from left: 0/4 (0.00%)
-Dropped rows from right: 2/5 (40.00%)
+    From left only: 1/4 (25.00%)
+    From right only: 0/4 (0.00%)
+    From both: 3/4 (75.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 0/4 (0.00%)
+Right input rows absent from the output: 2/5 (40.00%)
 
 Right join:
 
 >>> _ = df1.raffa.join(df2, on="A", how="right")
 Total rows in output table: 5
-From left only: 0/5 (0.00%)
-From right only: 2/5 (40.00%)
-From both: 3/5 (60.00%) (left dups 0, right dups 0)
-Dropped rows from left: 1/4 (25.00%)
-Dropped rows from right: 0/5 (0.00%)
+    From left only: 0/5 (0.00%)
+    From right only: 2/5 (40.00%)
+    From both: 3/5 (60.00%)
+        Duplicate left keys among the matched rows: 0
+        Duplicate right keys among the matched rows: 0
+        Join cardinality: one-to-one
+Left input rows absent from the output: 1/4 (25.00%)
+Right input rows absent from the output: 0/5 (0.00%)
 
 Filtering joins
 ---------------
@@ -440,12 +469,14 @@ Export a DataFrame to a Word ``.docx`` file:
    out = pl.DataFrame({"a": [1, 2, 3], "b": ["AAA", "BBB", "CCC"]})
    out.raffa.to_docx("main.docx")
 
-As with pandas, document/heading and table options can be passed as keyword
-arguments and are routed to the right place:
+As with pandas, document/heading options are passed in ``doc_options`` and
+table options in ``table_options``:
 
 .. code-block:: python
 
-   out.raffa.to_docx("main.docx", heading_text="Table 1", landscape=True)
+   out.raffa.to_docx(
+       "main.docx", doc_options={"heading_text": "Table 1", "landscape": True}
+   )
 
 .. _utilities:
 

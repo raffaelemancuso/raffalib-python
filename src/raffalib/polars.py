@@ -62,8 +62,9 @@ class RaffaPolarsSeriesUtils:
     The ``.raffa`` namespace on a :class:`polars.Series`.
 
     Registered automatically when :mod:`raffalib.polars` is imported. Provides
-    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`)
-    and tabulation helpers (:meth:`freq`, :meth:`crosstab`).
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`),
+    tabulation helpers (:meth:`freq`, :meth:`crosstab`), and a :meth:`toset`
+    converter.
     """
 
     def __init__(self, series: pl.Series):
@@ -182,6 +183,19 @@ class RaffaPolarsSeriesUtils:
         """
         df = pl.DataFrame({self._series.name: self._series, ser_b.name: ser_b})
         return df.raffa.crosstab(self._series.name, ser_b.name, perc=perc)
+
+    def toset(self) -> set:
+        """
+        Convert the Series values to a Python :class:`set`.
+
+        Mirrors :meth:`polars.Series.to_list`. Deduplicates by construction;
+        null values are kept (as ``None``), call ``.drop_nulls()`` first to
+        exclude them.
+
+        :return: The set of the Series' values.
+        :rtype: set
+        """
+        return set(self._series.to_list())
 
 
 # --- DATAFRAME --- #
@@ -406,6 +420,9 @@ class RaffaPolarsDataFrameUtils:
             ~pl.col(left_col).is_null(), ~pl.col(right_col).is_null()
         )
         n_both = joined_both.shape[0]
+        # is_duplicated() marks all duplicates as True, not only the extra
+        # copies, so these count every matched output row whose source row
+        # is reused (same semantics as pandas duplicated(keep=False))
         n_left_dups = joined_both.get_column(left_col).is_duplicated().sum()
         n_right_dups = joined_both.get_column(right_col).is_duplicated().sum()
         n_left_only = joined.filter(
@@ -446,16 +463,25 @@ class RaffaPolarsDataFrameUtils:
             joined = joined.permute.append([left_col, right_col])
         return joined
 
-    def to_docx(self, outfp: Path, **kwargs):
+    def to_docx(
+        self,
+        outfp: Path,
+        doc_options: dict | None = None,
+        table_options: dict | None = None,
+    ):
         """
         Export table in Word .docx file.
 
         :param outfp: The output file
         :type outfp: Path
-        :param kwargs: Options forwarded to :class:`~raffalib.export_docx.DocxFile`
-            (document/heading options such as ``heading_text`` or ``landscape``) or
-            to its ``add_table`` method (table options such as ``table_style`` or
-            ``table_font_size``).
+        :param doc_options: Options forwarded to
+            :class:`~raffalib.export_docx.DocxFile` (document/heading options
+            such as ``heading_text`` or ``landscape``).
+        :type doc_options: dict | None
+        :param table_options: Options forwarded to
+            :meth:`~raffalib.export_docx.DocxFile.add_table` (table options
+            such as ``table_style`` or ``table_font_size``).
+        :type table_options: dict | None
         :return: None
         :rtype: None
         """
@@ -467,7 +493,8 @@ class RaffaPolarsDataFrameUtils:
         n_rows, n_cols = df.shape[0] + 1, df.shape[1]
 
         # Create document with table
-        doc = DocxFile.with_table(n_rows, n_cols, **kwargs)
+        doc = DocxFile(**(doc_options or {}))
+        doc.add_table(n_rows, n_cols, **(table_options or {}))
         t = doc.table
 
         # add the header row (column names)

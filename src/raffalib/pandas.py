@@ -44,8 +44,8 @@ class RaffaSeries:
     The ``.raffa`` accessor on a :class:`pandas.Series`.
 
     Registered automatically when :mod:`raffalib.pandas` is imported. Provides
-    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`)
-    and a :meth:`freq` frequency table.
+    STATA-like change logging (:meth:`startlog` / :meth:`endlog` / :meth:`midlog`),
+    a :meth:`freq` frequency table, and a :meth:`toset` converter.
     """
 
     def __init__(self, data):
@@ -144,6 +144,19 @@ class RaffaSeries:
         df = pd.concat([tempdf, totals_row])
         df.index.name = self._series.name
         return df
+
+    def toset(self) -> set:
+        """
+        Convert the Series values to a Python :class:`set`.
+
+        Mirrors :meth:`pandas.Series.tolist`. Deduplicates by construction;
+        missing values are kept (as ``nan``), call ``.dropna()`` first to
+        exclude them.
+
+        :return: The set of the Series' values.
+        :rtype: set
+        """
+        return set(self._series)
 
 
 # --- DATAFRAME --- #
@@ -331,6 +344,9 @@ class RaffaDataFrame:
         # Detect how many rows in the output table are present in the input tables
         joined_both = joined[joined[left_col].notna() & joined[right_col].notna()]
         n_both = joined_both.shape[0]
+        # duplicated(keep=False) marks all duplicates as True, not only the
+        # extra copies, so these count every matched output row whose source
+        # row is reused (same semantics as polars is_duplicated)
         n_left_dups = int(joined_both[left_col].duplicated(keep=False).sum())
         n_right_dups = int(joined_both[right_col].duplicated(keep=False).sum())
         n_left_only = joined[joined[left_col].notna() & joined[right_col].isna()].shape[
@@ -381,18 +397,34 @@ class RaffaDataFrame:
         """
         return self._df[colname].raffa.freq(dropna=dropna)
 
-    def to_docx(self, outfp: Path, include_index: bool = True, **kwargs):
+    def to_docx(
+        self,
+        outfp: Path,
+        include_index: bool = True,
+        doc_options: dict | None = None,
+        table_options: dict | None = None,
+    ):
         """
         Export table in Word .docx file.
+
+        MultiIndex columns are rendered as one header row per level, with
+        adjacent header cells that share the same label (within the same
+        parent group) merged horizontally.
 
         :param outfp: The output file
         :type outfp: Path
         :param include_index: Whether to export the index
         :type include_index: bool
-        :param kwargs: Options forwarded to :class:`~raffalib.export_docx.DocxFile`
-            (document/heading options such as ``heading_text`` or ``landscape``) or
-            to its ``add_table`` method (table options such as ``table_style`` or
-            ``table_font_size``).
+        :param doc_options: Options forwarded to
+            :class:`~raffalib.export_docx.DocxFile` (document/heading options
+            such as ``heading_text`` or ``landscape``).
+        :type doc_options: dict | None
+        :param table_options: Options forwarded to
+            :meth:`~raffalib.export_docx.DocxFile.add_table` (table options
+            such as ``table_style`` or ``table_font_size``).
+            ``table_header_rows`` is set to the number of column levels unless
+            given here explicitly.
+        :type table_options: dict | None
         :return: None
         :rtype: None
         """
@@ -401,36 +433,52 @@ class RaffaDataFrame:
 
         # Create table
         # See: https://stackoverflow.com/a/40597684/1719931
-        # First row is for the table header (i.e., column names)
-        n_rows, n_cols = df.shape[0] + 1, df.shape[1]
+        # One header row per column level (1 for flat columns)
+        n_header_rows = df.columns.nlevels
+        n_rows, n_cols = df.shape[0] + n_header_rows, df.shape[1]
         # If we write the index, the first column will be used for the index
         if include_index:
             n_cols += 1
-        # Create document with table
-        doc = DocxFile.with_table(n_rows, n_cols, **kwargs)
+        col0 = 1 if include_index else 0
+        # Create document with table (callers may still override table_header_rows)
+        table_options = dict(table_options) if table_options else {}
+        table_options.setdefault("table_header_rows", n_header_rows)
+        doc = DocxFile(**(doc_options or {}))
+        doc.add_table(n_rows, n_cols, **table_options)
         t = doc.table
 
-        # add the header rows.
-        for j in range(df.shape[-1]):
-            if include_index:
-                t.cell(0, j + 1).text = str(df.columns[j])
-            else:
-                t.cell(0, j).text = str(df.columns[j])
+        # add the header rows: within each level, merge runs of columns that
+        # share the same labels on all levels down to (and including) this one,
+        # except on the leaf level, where data columns must stay distinct
+        cols = [c if isinstance(c, tuple) else (c,) for c in df.columns]
+        for lev in range(n_header_rows):
+            j = 0
+            while j < len(cols):
+                k = j
+                if lev < n_header_rows - 1:
+                    while (
+                        k + 1 < len(cols)
+                        and cols[k + 1][: lev + 1] == cols[j][: lev + 1]
+                    ):
+                        k += 1
+                cell = t.cell(lev, col0 + j)
+                if k > j:
+                    cell = cell.merge(t.cell(lev, col0 + k))
+                cell.text = str(cols[j][lev])
+                j = k + 1
 
         # add index names
         if include_index:
             if df.index.name is not None:
-                t.cell(0, 0).text = df.index.name
+                # in the bottom header row, next to the leaf column labels
+                t.cell(n_header_rows - 1, 0).text = str(df.index.name)
             for i in range(df.shape[0]):
-                t.cell(i + 1, 0).text = str(df.index[i])
+                t.cell(i + n_header_rows, 0).text = str(df.index[i])
 
         # add the rest of the data frame
         for i in range(df.shape[0]):
             for j in range(df.shape[-1]):
-                if include_index:
-                    t.cell(i + 1, j + 1).text = str(df.values[i, j])
-                else:
-                    t.cell(i + 1, j).text = str(df.values[i, j])
+                t.cell(i + n_header_rows, j + col0).text = str(df.values[i, j])
 
         # Save
         doc.save(outfp)

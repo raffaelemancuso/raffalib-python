@@ -34,7 +34,7 @@ optional-dependency *extras*, so you only pull in what you use:
    * - ``polars``
      - the :mod:`raffalib.polars` accessors and join logging
    * - ``bibliometrics``
-     - OpenAlex / Scopus helpers
+     - Scopus helpers
    * - ``crypto``
      - KeePassXC / GnuPG helpers
    * - ``db``

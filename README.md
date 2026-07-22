@@ -46,7 +46,7 @@ only pull in what you use:
 | ---------------- | ---------------------------------------------------- |
 | `pandas`         | `raffalib.pandas` accessors                          |
 | `polars`         | `raffalib.polars` accessors and join logging         |
-| `bibliometrics`  | OpenAlex / Scopus helpers                            |
+| `bibliometrics`  | Scopus helpers                                       |
 | `db`             | SQLAlchemy view helpers                              |
 | `web`            | Selenium helpers                                     |
 | `docs`           | Build the Sphinx documentation                       |
@@ -79,7 +79,7 @@ df = pd.DataFrame(
 
 # Shape changes are logged automatically
 _ = df.raffa.startlog().dropna(subset=["bill_depth_mm"]).raffa.endlog(timeit=False)
-# -> Removed 2/6 (33.33%) rows. New shape: (4, 3).
+# -> Removed 2/6 (33.33%) rows. New shape: (4; 3).
 
 # Pass clone=True to also detect value-level changes when the shape is unchanged
 _ = df.raffa.startlog(clone=True).fillna(0).raffa.endlog(timeit=False)
@@ -104,7 +104,7 @@ df = pl.DataFrame(
 )
 
 _ = df.raffa.startlog().filter(pl.col("species") == "Adelie").raffa.endlog(timeit=False)
-# -> Removed 3/6 (50.00%) rows. New shape: (3, 3).
+# -> Removed 3/6 (50.00%) rows. New shape: (3; 3).
 ```
 
 Both backends share the same `startlog(clone=False)` / `endlog(custom_msg=None, timeit=True)`
@@ -121,11 +121,14 @@ df2 = pd.DataFrame({"A": ["a1", "a2", "a3", "a5", "a6"], "C": ["c1", "c2", "c3",
 
 out = df1.raffa.join(df2, on="A", how="left")
 # Total rows in output table: 4
-# From left only: 1/4 (25.00%)
-# From right only: 0/4 (0.00%)
-# From both: 3/4 (75.00%) (left dups 0, right dups 0)
-# Dropped rows from left: 0/4 (0.00%)
-# Dropped rows from right: 2/5 (40.00%)
+#     From left only: 1/4 (25.00%)
+#     From right only: 0/4 (0.00%)
+#     From both: 3/4 (75.00%)
+#         Duplicate left keys among the matched rows: 0
+#         Duplicate right keys among the matched rows: 0
+#         Join cardinality: one-to-one
+# Left input rows absent from the output: 0/4 (0.00%)
+# Right input rows absent from the output: 2/5 (40.00%)
 ```
 
 Filtering joins (`how="semi"` / `how="anti"`) are detected automatically, and
@@ -157,7 +160,6 @@ See the [Examples](https://raffalib-python.readthedocs.io) page for the full wal
 | `raffalib.selenium`     | Scrolling and explicit-wait helpers for Selenium WebDriver             |
 | `raffalib.sqlalchemy`   | SQLAlchemy `CREATE VIEW` / `DROP VIEW` constructs and a `view()` helper |
 | `raffalib.ScopusUtils`  | Scopus API helpers                                                      |
-| `raffalib.check_openalex_api_key` | Validate an OpenAlex API key                                 |
 
 ## Development
 
