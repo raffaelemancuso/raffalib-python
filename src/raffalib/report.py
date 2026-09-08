@@ -65,7 +65,7 @@ def report_save(spec, title: str, fp, logger=None, timestamp: str | None = None)
     """
     report = report_build(spec, title, timestamp=timestamp)
     print(report, end="")
-    Path(fp).write_text(report, encoding="utf-8")
+    Path(fp).write_text(report, encoding="utf-8", newline="\n")
     if logger is not None:
         logger.info(f"Report saved to {fp}")
     return report
