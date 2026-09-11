@@ -48,6 +48,7 @@ only pull in what you use:
 | `polars`         | `raffalib.polars` accessors and join logging         |
 | `bibliometrics`  | Scopus helpers                                       |
 | `db`             | SQLAlchemy view helpers                              |
+| `rnote`          | Write Rnote (`.rnote`) notebooks from images and text|
 | `web`            | Selenium helpers                                     |
 | `docs`           | Build the Sphinx documentation                       |
 | `dev`            | Ruff + pytest for development                        |

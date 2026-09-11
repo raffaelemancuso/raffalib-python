@@ -39,6 +39,8 @@ optional-dependency *extras*, so you only pull in what you use:
      - KeePassXC / GnuPG helpers
    * - ``db``
      - SQLAlchemy view helpers
+   * - ``rnote``
+     - :mod:`raffalib.rnote`, writing Rnote (``.rnote``) notebooks from images and text
    * - ``web``
      - Selenium helpers
    * - ``docs``

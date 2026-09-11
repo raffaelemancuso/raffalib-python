@@ -34,5 +34,5 @@ jobs:
         run: >-
           uv run
           --extra dev --extra pandas --extra polars
-          --extra db --extra web --extra bibliometrics
+          --extra db --extra web --extra bibliometrics --extra rnote
           pytest

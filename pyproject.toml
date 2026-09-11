@@ -34,6 +34,10 @@ bibliometrics = [
 db = [
     "sqlalchemy>=2.0.48",
 ]
+rnote = [
+    "pillow>=12.0.0",
+    "pymupdf>=1.26.0",
+]
 dev = [
     "ruff>=0.15.5",
     "pytest>=8.4.0",

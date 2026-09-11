@@ -119,7 +119,7 @@ output (plain `StreamHandler` or `rich.RichHandler`). It re-enables the
   to the corresponding `Raffa*` class instead.
 - **Optional deps are real**: only `humanize`, `jsonpickle`, `natsort`,
   `python-docx`, `rich`, `tqdm` are core. pandas, polars, sqlalchemy, selenium,
-  etc. live behind extras (see `pyproject.toml`). Tests guard their
+  Pillow/PyMuPDF (`rnote`), etc. live behind extras (see `pyproject.toml`). Tests guard their
   imports with `pytest.importorskip(...)` so the suite passes without every
   extra installed — follow that pattern for any new optional-dep test.
 - Every source file carries the **GPL-3.0-or-later license header**. Keep it on
