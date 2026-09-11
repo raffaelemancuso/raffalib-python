@@ -5,8 +5,15 @@ from raffalib import gisco
 
 
 def test_postcode_key():
-    df = pl.DataFrame({"pc": ["LV-1010", "3846 AG", "12-345", "d02 x285", "VLT 1171", None, "--"], "cntr": ["LV", "NL", "PL", "IE", "MT", "DE", "DE"]})
-    out = df.select(gisco.postcode_key(pl.col("pc"), pl.col("cntr")).alias("key"))["key"].to_list()
+    df = pl.DataFrame(
+        {
+            "pc": ["LV-1010", "3846 AG", "12-345", "d02 x285", "VLT 1171", None, "--"],
+            "cntr": ["LV", "NL", "PL", "IE", "MT", "DE", "DE"],
+        }
+    )
+    out = df.select(gisco.postcode_key(pl.col("pc"), pl.col("cntr")).alias("key"))[
+        "key"
+    ].to_list()
     assert out == ["1010", "3846AG", "12345", "D02", "VLT", None, None]
 
 
@@ -32,7 +39,14 @@ def tables():
         {
             "cntr": ["DE", "DE", "DE", "DE", "NL", "NL"],
             "postcode": ["80331", "80333", "86153", "01067", "3846 AG", "3846 BB"],
-            "lau": ["München", "München", "Augsburg", "Dresden", "Harderwijk", "Harderwijk"],
+            "lau": [
+                "München",
+                "München",
+                "Augsburg",
+                "Dresden",
+                "Harderwijk",
+                "Harderwijk",
+            ],
             "nuts3_gisco": ["DE212", "DE212", "DE271", "DED21", "NL230", "NL230"],
             "lon": [11.57, 11.56, 10.89, 13.74, 5.62, 5.63],
             "lat": [48.14, 48.15, 48.37, 51.05, 52.35, 52.36],
@@ -52,9 +66,34 @@ def test_locate(tables):
     )
     out = tables.locate(df, cntr="cntr", postcode="postcode", city="city").sort("id")
     # 1067 lost the leading zero of 01067; 3846 is the 4-character prefix of the Dutch codes
-    assert out["nuts3_gisco"].to_list() == ["DE212", "DED21", "NL230", "NL230", "DE212", None, "DE271"]
-    assert out["source"].to_list() == ["postcode", "postcode", "city", "postcode", "city", None, "city"]
-    assert set(out.columns) == {"id", "cntr", "postcode", "city", "lon", "lat", "nuts3_gisco", "source"}
+    assert out["nuts3_gisco"].to_list() == [
+        "DE212",
+        "DED21",
+        "NL230",
+        "NL230",
+        "DE212",
+        None,
+        "DE271",
+    ]
+    assert out["source"].to_list() == [
+        "postcode",
+        "postcode",
+        "city",
+        "postcode",
+        "city",
+        None,
+        "city",
+    ]
+    assert set(out.columns) == {
+        "id",
+        "cntr",
+        "postcode",
+        "city",
+        "lon",
+        "lat",
+        "nuts3_gisco",
+        "source",
+    }
 
 
 def test_locate_without_postcode_column(tables):

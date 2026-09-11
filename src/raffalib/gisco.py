@@ -61,7 +61,11 @@ def fold_column(df: pl.DataFrame, col: str, key: str) -> pl.DataFrame:
     """Add `key` = fold_name(`col`), computed once per distinct value."""
     uniq = df.select(pl.col(col).unique()).to_series()
     mapping = {v: fold_name(v) for v in uniq if v is not None}
-    return df.with_columns(pl.col(col).replace_strict(mapping, default=None, return_dtype=pl.String).alias(key))
+    return df.with_columns(
+        pl.col(col)
+        .replace_strict(mapping, default=None, return_dtype=pl.String)
+        .alias(key)
+    )
 
 
 def postcode_key(col: pl.Expr, cntr: pl.Expr) -> pl.Expr:
@@ -69,7 +73,9 @@ def postcode_key(col: pl.Expr, cntr: pl.Expr) -> pl.Expr:
     leading country prefix dropped ("LV-1010", "HU-1138"), and only the
     3-character routing key / locality code for Ireland and Malta."""
     key = col.cast(pl.String).str.to_uppercase().str.replace_all(r"[^A-Z0-9]", "")
-    key = pl.when(key.str.contains(r"^[A-Z]{2}\d")).then(key.str.slice(2)).otherwise(key)
+    key = (
+        pl.when(key.str.contains(r"^[A-Z]{2}\d")).then(key.str.slice(2)).otherwise(key)
+    )
     key = pl.when(cntr.is_in(["IE", "MT"])).then(key.str.slice(0, 3)).otherwise(key)
     return pl.when(key == "").then(None).otherwise(key)
 
@@ -94,35 +100,61 @@ def load_postcode_points(fp: Path | str) -> pl.DataFrame:
 class PostcodeTables:
     """Lookup tables built from the GISCO postcode points."""
 
-    postcodes: pl.DataFrame  # cntr, key, lon, lat, nuts3_gisco: one point per postcode key
-    prefixes: pl.DataFrame  # cntr, key4, lon, lat, nuts3_gisco: 4-character prefixes of long codes
+    postcodes: (
+        pl.DataFrame
+    )  # cntr, key, lon, lat, nuts3_gisco: one point per postcode key
+    prefixes: (
+        pl.DataFrame
+    )  # cntr, key4, lon, lat, nuts3_gisco: 4-character prefixes of long codes
     key_length: pl.DataFrame  # cntr, klen: the usual key length of the country
-    cities: pl.DataFrame  # cntr, city_key, lon, lat, nuts3_gisco: usable municipality names
+    cities: (
+        pl.DataFrame
+    )  # cntr, city_key, lon, lat, nuts3_gisco: usable municipality names
     n_city_names: int  # municipality names in the dataset, usable or not
 
     @classmethod
-    def from_gisco(cls, gisco: pl.DataFrame, city_min_share: float = 0.9) -> "PostcodeTables":
+    def from_gisco(
+        cls, gisco: pl.DataFrame, city_min_share: float = 0.9
+    ) -> "PostcodeTables":
         pc_tbl = (
             gisco.drop_nulls("key")
             .group_by("cntr", "key")
-            .agg(pl.col("lon").mean(), pl.col("lat").mean(), pl.col("nuts3_gisco").mode().first())
+            .agg(
+                pl.col("lon").mean(),
+                pl.col("lat").mean(),
+                pl.col("nuts3_gisco").mode().first(),
+            )
         )
-        klen_tbl = pc_tbl.group_by("cntr").agg(pl.col("key").str.len_chars().mode().first().alias("klen"))
+        klen_tbl = pc_tbl.group_by("cntr").agg(
+            pl.col("key").str.len_chars().mode().first().alias("klen")
+        )
         pc4_tbl = (
             pc_tbl.join(klen_tbl, on="cntr")
             .filter(pl.col("klen") >= 6)
             .with_columns(key4=pl.col("key").str.slice(0, 4))
             .group_by("cntr", "key4")
-            .agg(pl.col("lon").mean(), pl.col("lat").mean(), pl.col("nuts3_gisco").mode().first())
+            .agg(
+                pl.col("lon").mean(),
+                pl.col("lat").mean(),
+                pl.col("nuts3_gisco").mode().first(),
+            )
         )
         city_tbl = (
             fold_column(gisco.drop_nulls("lau"), "lau", "city_key")
             .drop_nulls("city_key")
             .with_columns(
-                nuts3_mode=pl.col("nuts3_gisco").mode().first().over("cntr", "city_key"),
-                share=(pl.col("nuts3_gisco") == pl.col("nuts3_gisco").mode().first()).mean().over("cntr", "city_key"),
+                nuts3_mode=pl.col("nuts3_gisco")
+                .mode()
+                .first()
+                .over("cntr", "city_key"),
+                share=(pl.col("nuts3_gisco") == pl.col("nuts3_gisco").mode().first())
+                .mean()
+                .over("cntr", "city_key"),
             )
-            .filter((pl.col("share") >= city_min_share) & (pl.col("nuts3_gisco") == pl.col("nuts3_mode")))
+            .filter(
+                (pl.col("share") >= city_min_share)
+                & (pl.col("nuts3_gisco") == pl.col("nuts3_mode"))
+            )
             .with_columns(
                 d2=(pl.col("lon") - pl.col("lon").mean().over("cntr", "city_key")) ** 2
                 + (pl.col("lat") - pl.col("lat").mean().over("cntr", "city_key")) ** 2
@@ -137,33 +169,101 @@ class PostcodeTables:
         n_city_names = gisco.select("cntr", "lau").drop_nulls().unique().height
         return cls(pc_tbl, pc4_tbl, klen_tbl, city_tbl, n_city_names)
 
-    def locate(self, df: pl.DataFrame, cntr: str, postcode: str | None = None, city: str | None = None) -> pl.DataFrame:
+    def locate(
+        self,
+        df: pl.DataFrame,
+        cntr: str,
+        postcode: str | None = None,
+        city: str | None = None,
+    ) -> pl.DataFrame:
         """Append lon, lat, nuts3_gisco and source ("postcode", "city" or null) to
         `df` from its GISCO country id column `cntr`, its postcode column and its
         municipality-name column (either may be omitted)."""
         out = df.with_columns(
-            key=postcode_key(pl.col(postcode), pl.col(cntr)) if postcode else pl.lit(None, dtype=pl.String),
+            key=postcode_key(pl.col(postcode), pl.col(cntr))
+            if postcode
+            else pl.lit(None, dtype=pl.String),
         ).join(self.key_length, on=cntr, how="left")
         out = out.with_columns(
             # a numeric postcode one digit short of the country's usual length lost a leading zero
-            key=pl.when(pl.col("key").str.contains(r"^\d+$") & (pl.col("key").str.len_chars() == pl.col("klen") - 1))
+            key=pl.when(
+                pl.col("key").str.contains(r"^\d+$")
+                & (pl.col("key").str.len_chars() == pl.col("klen") - 1)
+            )
             .then(pl.col("key").str.zfill(pl.col("klen")))
             .otherwise(pl.col("key"))
-        ).with_columns(key4=pl.when((pl.col("klen") >= 6) & (pl.col("key").str.len_chars() == 4)).then(pl.col("key")))
-        out = fold_column(out, city, "city_key") if city else out.with_columns(city_key=pl.lit(None, dtype=pl.String))
+        ).with_columns(
+            key4=pl.when(
+                (pl.col("klen") >= 6) & (pl.col("key").str.len_chars() == 4)
+            ).then(pl.col("key"))
+        )
         out = (
-            out.join(self.postcodes.rename({"cntr": cntr, "lon": "lon_pc", "lat": "lat_pc", "nuts3_gisco": "nuts3_pc"}), on=[cntr, "key"], how="left")
-            .join(self.prefixes.rename({"cntr": cntr, "lon": "lon_p4", "lat": "lat_p4", "nuts3_gisco": "nuts3_p4"}), on=[cntr, "key4"], how="left")
-            .join(self.cities.rename({"cntr": cntr, "lon": "lon_ct", "lat": "lat_ct", "nuts3_gisco": "nuts3_ct"}), on=[cntr, "city_key"], how="left")
+            fold_column(out, city, "city_key")
+            if city
+            else out.with_columns(city_key=pl.lit(None, dtype=pl.String))
+        )
+        out = (
+            out.join(
+                self.postcodes.rename(
+                    {
+                        "cntr": cntr,
+                        "lon": "lon_pc",
+                        "lat": "lat_pc",
+                        "nuts3_gisco": "nuts3_pc",
+                    }
+                ),
+                on=[cntr, "key"],
+                how="left",
+            )
+            .join(
+                self.prefixes.rename(
+                    {
+                        "cntr": cntr,
+                        "lon": "lon_p4",
+                        "lat": "lat_p4",
+                        "nuts3_gisco": "nuts3_p4",
+                    }
+                ),
+                on=[cntr, "key4"],
+                how="left",
+            )
+            .join(
+                self.cities.rename(
+                    {
+                        "cntr": cntr,
+                        "lon": "lon_ct",
+                        "lat": "lat_ct",
+                        "nuts3_gisco": "nuts3_ct",
+                    }
+                ),
+                on=[cntr, "city_key"],
+                how="left",
+            )
             .with_columns(
                 lon=pl.coalesce("lon_pc", "lon_p4", "lon_ct"),
                 lat=pl.coalesce("lat_pc", "lat_p4", "lat_ct"),
                 nuts3_gisco=pl.coalesce("nuts3_pc", "nuts3_p4", "nuts3_ct"),
-                source=pl.when(pl.col("nuts3_pc").is_not_null() | pl.col("nuts3_p4").is_not_null())
+                source=pl.when(
+                    pl.col("nuts3_pc").is_not_null() | pl.col("nuts3_p4").is_not_null()
+                )
                 .then(pl.lit("postcode"))
                 .when(pl.col("nuts3_ct").is_not_null())
                 .then(pl.lit("city"))
                 .otherwise(None),
             )
         )
-        return out.drop("key", "klen", "key4", "city_key", "lon_pc", "lat_pc", "nuts3_pc", "lon_p4", "lat_p4", "nuts3_p4", "lon_ct", "lat_ct", "nuts3_ct")
+        return out.drop(
+            "key",
+            "klen",
+            "key4",
+            "city_key",
+            "lon_pc",
+            "lat_pc",
+            "nuts3_pc",
+            "lon_p4",
+            "lat_p4",
+            "nuts3_p4",
+            "lon_ct",
+            "lat_ct",
+            "nuts3_ct",
+        )
